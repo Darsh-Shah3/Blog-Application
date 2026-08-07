@@ -1,0 +1,89 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:3000"
+              - "http://127.0.0.1:3000"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
+      routes:
+        - id: auth-service
+          uri: ${AUTH_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/auth/**,/api/v1/profiles/**,/api/v1/admin/**,/api/v1/roles/**
+        - id: community-service
+          uri: ${COMMUNITY_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/communities/**
+        - id: post-service
+          uri: ${POST_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/v1/posts/**
+        - id: comment-service
+          uri: ${COMMENT_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/v1/comments/**
+        - id: vote-service
+          uri: ${VOTE_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/v1/votes/**
+        - id: media-service
+          uri: ${MEDIA_SERVICE_URL:http://localhost:8086}
+          predicates:
+            - Path=/api/v1/media/**
+        - id: audit-service
+          uri: ${AUDIT_SERVICE_URL:http://localhost:8087}
+          predicates:
+            - Path=/api/v1/audit/**,/api/v1/reports/**
+        - id: notification-service
+          uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8088}
+          predicates:
+            - Path=/api/v1/notifications/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics,gateway
+  endpoint:
+    health:
+      show-details: when_authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
+  security:
+    require-jwt-for-all-apis: ${REQUIRE_JWT_FOR_ALL_APIS:true}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    requests-per-minute: ${RATE_LIMIT_RPM:120}
+    auth-requests-per-minute: ${RATE_LIMIT_AUTH_RPM:20}
+
+logging:
+  level:
+    root: INFO
+    com.threadly: DEBUG
+    org.springframework.cloud.gateway: INFO
+    org.springframework.web: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} [service=${spring.application.name},requestId=%X{requestId:-},userId=%X{userId:-},path=%X{path:-}] - %msg%n"

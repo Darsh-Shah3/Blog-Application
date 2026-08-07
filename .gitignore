@@ -1,10 +1,37 @@
-HELP.md
+### Build ###
 target/
-!.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+*.class
+*.jar
+*.war
+*.ear
+*.log
 
-### STS ###
+### Node / Next.js ###
+node_modules/
+.next/
+out/
+dist/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+
+### Env / secrets ###
+.env
+.env.local
+.env.*.local
+!.env.example
+
+### IDE ###
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
 .apt_generated
 .classpath
 .factorypath
@@ -12,22 +39,22 @@ target/
 .settings
 .springBeans
 .sts4-cache
-
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
-
-### NetBeans ###
+.nbproject/
 /nbproject/private/
 /nbbuild/
-/dist/
 /nbdist/
 /.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
+HELP.md
 
-### VS Code ###
-.vscode/
+### OS ###
+.DS_Store
+Thumbs.db
+
+### Docker volumes / media ###
+data/
+uploads/
+media-files/
+*.pid
+
+### Maven wrapper noise ###
+services/**/target/

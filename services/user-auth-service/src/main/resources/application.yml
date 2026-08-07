@@ -1,0 +1,79 @@
+server:
+  port: ${SERVER_PORT:8081}
+
+spring:
+  application:
+    name: user-auth-service
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:auth_db}
+    username: ${POSTGRES_USER:threadly}
+    password: ${POSTGRES_PASSWORD:threadly_secret}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  internal-api-key: ${INTERNAL_API_KEY:threadly-internal-dev-key}
+  bootstrap-admin:
+    enabled: ${BOOTSTRAP_ADMIN_ENABLED:true}
+    username: ${BOOTSTRAP_ADMIN_USERNAME:admin}
+    email: ${BOOTSTRAP_ADMIN_EMAIL:admin@threadly.local}
+    password: ${BOOTSTRAP_ADMIN_PASSWORD:Admin@12345}
+    display-name: ${BOOTSTRAP_ADMIN_DISPLAY_NAME:Platform Admin}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    requests-per-minute: ${RATE_LIMIT_RPM:120}
+    auth-requests-per-minute: ${RATE_LIMIT_AUTH_RPM:20}
+  mail:
+    enabled: ${MAIL_ENABLED:false}
+    from: ${MAIL_FROM:noreply@threadly.local}
+    frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
+    reset-token-minutes: ${MAIL_RESET_TOKEN_MINUTES:30}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    root: INFO
+    com.threadly: DEBUG
+    org.springframework.security: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} [service=${spring.application.name},requestId=%X{requestId:-},userId=%X{userId:-}] - %msg%n"

@@ -1,0 +1,416 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: threadly-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-threadly}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-threadly_secret}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-threadly}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - threadly
+
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: threadly-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@threadly.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin_secret}
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - threadly
+
+  user-auth-service:
+    build: ./services/user-auth-service
+    container_name: threadly-auth
+    environment:
+      SERVER_PORT: 8081
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: ${POSTGRES_USER:-threadly}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-threadly_secret}
+      JWT_SECRET: ${JWT_SECRET:-ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-threadly-internal-svc-key-9f3c8a2b}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-120}
+      RATE_LIMIT_AUTH_RPM: ${RATE_LIMIT_AUTH_RPM:-20}
+      BOOTSTRAP_ADMIN_ENABLED: ${BOOTSTRAP_ADMIN_ENABLED:-true}
+      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-admin}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@threadly.local}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-Admin@12345}
+      MAIL_ENABLED: ${MAIL_ENABLED:-false}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-noreply@threadly.local}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-true}
+      MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS:-true}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:3000}
+      MAIL_RESET_TOKEN_MINUTES: ${MAIL_RESET_TOKEN_MINUTES:-30}
+      JAVA_OPTS: "-Xmx256m -Xms128m"
+    ports:
+      - "${AUTH_PORT:-8081}:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - threadly
+
+  community-service:
+    build: ./services/community-service
+    container_name: threadly-community
+    environment:
+      SERVER_PORT: 8082
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: community_db
+      POSTGRES_USER: ${POSTGRES_USER:-threadly}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-threadly_secret}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-threadly-internal-svc-key-9f3c8a2b}
+      JWT_SECRET: ${JWT_SECRET:-ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-180}
+      JAVA_OPTS: "-Xmx256m -Xms128m"
+    ports:
+      - "${COMMUNITY_PORT:-8082}:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - threadly
+
+  post-service:
+    build: ./services/post-service
+    container_name: threadly-post
+    environment:
+      SERVER_PORT: 8083
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: post_db
+      POSTGRES_USER: ${POSTGRES_USER:-threadly}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-threadly_secret}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-threadly-internal-svc-key-9f3c8a2b}
+      JWT_SECRET: ${JWT_SECRET:-ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-180}
+      COMMUNITY_SERVICE_URL: http://community-service:8082
+      AUTH_SERVICE_URL: http://user-auth-service:8081
+      AUDIT_SERVICE_URL: http://audit-service:8087
+      NOTIFICATION_SERVICE_URL: http://notification-service:8088
+      JAVA_OPTS: "-Xmx256m -Xms128m"
+    ports:
+      - "${POST_PORT:-8083}:8083"
+    depends_on:
+      community-service:
+        condition: service_healthy
+      user-auth-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8083/actuator/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - threadly
+
+  comment-service:
+    build: ./services/comment-service
+    container_name: threadly-comment
+    environment:
+      SERVER_PORT: 8084
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: comment_db
+      POSTGRES_USER: ${POSTGRES_USER:-threadly}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-threadly_secret}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-threadly-internal-svc-key-9f3c8a2b}
+      JWT_SECRET: ${JWT_SECRET:-ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-180}
+      POST_SERVICE_URL: http://post-service:8083
+      AUTH_SERVICE_URL: http://user-auth-service:8081
+      JAVA_OPTS: "-Xmx256m -Xms128m"
+    ports:
+      - "${COMMENT_PORT:-8084}:8084"
+    depends_on:
+      post-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8084/actuator/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - threadly
+
+  vote-service:
+    build: ./services/vote-service
+    container_name: threadly-vote
+    environment:
+      SERVER_PORT: 8085
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: vote_db
+      POSTGRES_USER: ${POSTGRES_USER:-threadly}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-threadly_secret}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-threadly-internal-svc-key-9f3c8a2b}
+      JWT_SECRET: ${JWT_SECRET:-ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-180}
+      POST_SERVICE_URL: http://post-service:8083
+      COMMENT_SERVICE_URL: http://comment-service:8084
+      AUTH_SERVICE_URL: http://user-auth-service:8081
+      JAVA_OPTS: "-Xmx256m -Xms128m"
+    ports:
+      - "${VOTE_PORT:-8085}:8085"
+    depends_on:
+      post-service:
+        condition: service_healthy
+      comment-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8085/actuator/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - threadly
+
+  media-service:
+    build: ./services/media-service
+    container_name: threadly-media
+    environment:
+      SERVER_PORT: 8086
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: media_db
+      POSTGRES_USER: ${POSTGRES_USER:-threadly}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-threadly_secret}
+      MEDIA_UPLOAD_DIR: /app/uploads
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-threadly-internal-svc-key-9f3c8a2b}
+      JWT_SECRET: ${JWT_SECRET:-ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-180}
+      JAVA_OPTS: "-Xmx256m -Xms128m"
+    ports:
+      - "${MEDIA_PORT:-8086}:8086"
+    volumes:
+      - media_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8086/actuator/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - threadly
+
+  audit-service:
+    build: ./services/audit-service
+    container_name: threadly-audit
+    environment:
+      SERVER_PORT: 8087
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: audit_db
+      POSTGRES_USER: ${POSTGRES_USER:-threadly}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-threadly_secret}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-threadly-internal-svc-key-9f3c8a2b}
+      JWT_SECRET: ${JWT_SECRET:-ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-180}
+      AUTH_SERVICE_URL: http://user-auth-service:8081
+      POST_SERVICE_URL: http://post-service:8083
+      COMMUNITY_SERVICE_URL: http://community-service:8082
+      COMMENT_SERVICE_URL: http://comment-service:8084
+      JAVA_OPTS: "-Xmx256m -Xms128m"
+    ports:
+      - "${AUDIT_PORT:-8087}:8087"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8087/actuator/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - threadly
+
+  notification-service:
+    build: ./services/notification-service
+    container_name: threadly-notification
+    environment:
+      SERVER_PORT: 8088
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: notification_db
+      POSTGRES_USER: ${POSTGRES_USER:-threadly}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-threadly_secret}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-threadly-internal-svc-key-9f3c8a2b}
+      JWT_SECRET: ${JWT_SECRET:-ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-180}
+      AUTH_SERVICE_URL: http://user-auth-service:8081
+      MAIL_ENABLED: ${MAIL_ENABLED:-false}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-noreply@threadly.local}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-true}
+      MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS:-true}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:3000}
+      JAVA_OPTS: "-Xmx256m -Xms128m"
+    ports:
+      - "${NOTIFICATION_PORT:-8088}:8088"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      user-auth-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8088/actuator/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - threadly
+
+  api-gateway:
+    build: ./services/api-gateway
+    container_name: threadly-gateway
+    environment:
+      SERVER_PORT: 8080
+      JWT_SECRET: ${JWT_SECRET:-ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
+      REQUIRE_JWT_FOR_ALL_APIS: ${REQUIRE_JWT_FOR_ALL_APIS:-true}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-120}
+      RATE_LIMIT_AUTH_RPM: ${RATE_LIMIT_AUTH_RPM:-20}
+      AUTH_SERVICE_URL: http://user-auth-service:8081
+      COMMUNITY_SERVICE_URL: http://community-service:8082
+      POST_SERVICE_URL: http://post-service:8083
+      COMMENT_SERVICE_URL: http://comment-service:8084
+      VOTE_SERVICE_URL: http://vote-service:8085
+      MEDIA_SERVICE_URL: http://media-service:8086
+      AUDIT_SERVICE_URL: http://audit-service:8087
+      NOTIFICATION_SERVICE_URL: http://notification-service:8088
+      JAVA_OPTS: "-Xmx256m -Xms128m"
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    depends_on:
+      user-auth-service:
+        condition: service_healthy
+      community-service:
+        condition: service_healthy
+      post-service:
+        condition: service_healthy
+      comment-service:
+        condition: service_healthy
+      vote-service:
+        condition: service_healthy
+      media-service:
+        condition: service_healthy
+      audit-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    networks:
+      - threadly
+
+  frontend:
+    build:
+      context: ./services/frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+    container_name: threadly-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - api-gateway
+    networks:
+      - threadly
+
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: threadly-prometheus
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    networks:
+      - threadly
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: threadly-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - threadly
+
+volumes:
+  postgres_data:
+  media_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  threadly:
+    driver: bridge

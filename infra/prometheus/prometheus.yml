@@ -1,0 +1,43 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: api-gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["api-gateway:8080"]
+
+  - job_name: user-auth-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["user-auth-service:8081"]
+
+  - job_name: community-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["community-service:8082"]
+
+  - job_name: post-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["post-service:8083"]
+
+  - job_name: comment-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["comment-service:8084"]
+
+  - job_name: vote-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["vote-service:8085"]
+
+  - job_name: media-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["media-service:8086"]

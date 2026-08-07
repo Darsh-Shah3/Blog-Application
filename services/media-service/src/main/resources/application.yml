@@ -1,0 +1,52 @@
+server:
+  port: ${SERVER_PORT:8086}
+
+spring:
+  application:
+    name: media-service
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:media_db}
+    username: ${POSTGRES_USER:threadly}
+    password: ${POSTGRES_PASSWORD:threadly_secret}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  servlet:
+    multipart:
+      max-file-size: ${MEDIA_MAX_MULTIPART:50MB}
+      max-request-size: ${MEDIA_MAX_MULTIPART:50MB}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
+  internal-api-key: ${INTERNAL_API_KEY:threadly-internal-dev-key}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    requests-per-minute: ${RATE_LIMIT_RPM:180}
+  upload-dir: ${MEDIA_UPLOAD_DIR:./uploads}
+  # Free local volume caps (bytes). Tune via env without code changes.
+  max-file-bytes: ${MEDIA_MAX_FILE_BYTES:52428800}
+  max-image-bytes: ${MEDIA_MAX_IMAGE_BYTES:5242880}
+  max-video-bytes: ${MEDIA_MAX_VIDEO_BYTES:52428800}
+  max-audio-bytes: ${MEDIA_MAX_AUDIO_BYTES:15728640}
+  max-document-bytes: ${MEDIA_MAX_DOCUMENT_BYTES:20971520}
+  max-other-bytes: ${MEDIA_MAX_OTHER_BYTES:10485760}
+
+logging:
+  level:
+    root: INFO
+    com.threadly: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} [service=${spring.application.name},requestId=%X{requestId:-},userId=%X{userId:-}] - %msg%n"

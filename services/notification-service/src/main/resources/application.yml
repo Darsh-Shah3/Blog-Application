@@ -1,0 +1,55 @@
+server:
+  port: ${SERVER_PORT:8088}
+
+spring:
+  application:
+    name: notification-service
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:notification_db}
+    username: ${POSTGRES_USER:threadly}
+    password: ${POSTGRES_PASSWORD:threadly_secret}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
+  internal-api-key: ${INTERNAL_API_KEY:threadly-internal-dev-key}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    requests-per-minute: ${RATE_LIMIT_RPM:180}
+  services:
+    auth-base-url: ${AUTH_SERVICE_URL:http://localhost:8081}
+  mail:
+    enabled: ${MAIL_ENABLED:false}
+    from: ${MAIL_FROM:noreply@threadly.local}
+  frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
+
+logging:
+  level:
+    root: INFO
+    com.threadly: DEBUG
