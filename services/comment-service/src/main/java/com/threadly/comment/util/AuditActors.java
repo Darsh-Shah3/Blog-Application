@@ -3,7 +3,7 @@ package com.threadly.comment.util;
 public final class AuditActors {
     private AuditActors() {}
 
-    public static String resolve(String headerUsername, Long userId) {
+    public static String resolve(String headerUsername, java.util.UUID userId) {
         if (headerUsername != null && !headerUsername.isBlank()) {
             return headerUsername.trim().toLowerCase();
         }

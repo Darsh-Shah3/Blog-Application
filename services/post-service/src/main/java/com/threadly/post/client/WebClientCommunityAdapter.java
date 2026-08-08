@@ -14,11 +14,8 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
-/**
- * WebClient adapter implementing CommunityPort.
- * Swapping HTTP protocol (or later a message bus) only requires a new @Primary/@Bean adapter.
- */
 @Component
 public class WebClientCommunityAdapter implements CommunityPort {
 
@@ -33,7 +30,7 @@ public class WebClientCommunityAdapter implements CommunityPort {
     }
 
     @Override
-    public Optional<CommunitySummary> findById(Long communityId) {
+    public Optional<CommunitySummary> findById(UUID communityId) {
         try {
             CommunityDto dto = webClient.get()
                     .uri("/api/v1/communities/{id}", communityId)
@@ -54,25 +51,23 @@ public class WebClientCommunityAdapter implements CommunityPort {
     }
 
     @Override
-    public List<Long> findJoinedCommunityIds(Long userId) {
+    public List<UUID> findJoinedCommunityIds(UUID userId) {
         try {
-            List<Long> ids = webClient.get()
+            List<UUID> ids = webClient.get()
                     .uri("/api/v1/communities/memberships/user/{userId}", userId)
                     .header("X-Internal-Api-Key", internalApiKey)
                     .retrieve()
-                    .bodyToMono(new ParameterizedTypeReference<List<Long>>() {})
+                    .bodyToMono(new ParameterizedTypeReference<List<UUID>>() {})
                     .block(Duration.ofSeconds(3));
             return ids == null ? Collections.emptyList() : ids;
         } catch (Exception e) {
-            // Soft-fail: home feed falls back to global newest when membership fetch fails.
             log.warn("Failed joined communities userId={}: {}", userId, e.getMessage());
             return Collections.emptyList();
         }
     }
 
-    /** Wire format from community-service — kept private so domain never depends on it. */
     private static class CommunityDto {
-        public Long id;
+        public UUID id;
         public String name;
         public String slug;
     }

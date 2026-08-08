@@ -2,14 +2,11 @@ package com.threadly.post.port;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
-/**
- * Outbound port to community-service.
- * Post domain does not depend on HTTP/WebClient types — only this contract.
- */
 public interface CommunityPort {
 
-    Optional<CommunitySummary> findById(Long communityId);
+    Optional<CommunitySummary> findById(UUID communityId);
 
-    List<Long> findJoinedCommunityIds(Long userId);
+    List<UUID> findJoinedCommunityIds(UUID userId);
 }

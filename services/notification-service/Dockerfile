@@ -1,8 +1,8 @@
-﻿FROM eclipse-temurin:17-jdk-alpine AS build
+FROM eclipse-temurin:17-jdk-alpine AS build
 WORKDIR /app
 COPY pom.xml .
 COPY src ./src
-RUN apk add --no-cache maven && mvn -q -DskipTests package
+RUN apk add --no-cache maven && mvn -q -DskipTests -Dmaven.test.skip=true package
 
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app

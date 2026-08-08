@@ -8,15 +8,17 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface NotificationRepository extends JpaRepository<Notification, Long> {
+import java.util.UUID;
+
+public interface NotificationRepository extends JpaRepository<Notification, UUID> {
 
     @Query(NotificationQueries.SEARCH_FOR_USER)
     Page<Notification> search(
-            @Param("userId") Long userId,
+            @Param("userId") UUID userId,
             @Param("unreadOnly") boolean unreadOnly,
             @Param("type") String type,
             @Param("q") String q,
             Pageable pageable);
 
-    long countByUserIdAndReadAtIsNull(Long userId);
+    long countByUserIdAndReadAtIsNull(UUID userId);
 }

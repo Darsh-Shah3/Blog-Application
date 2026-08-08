@@ -1,4 +1,6 @@
 package com.threadly.comment.port;
 
-public record UserSummary(Long id, String username) {
+import java.util.UUID;
+
+public record UserSummary(UUID id, String username) {
 }

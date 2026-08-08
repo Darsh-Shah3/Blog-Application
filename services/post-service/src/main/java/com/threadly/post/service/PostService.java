@@ -5,17 +5,22 @@ import com.threadly.post.dto.PostResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
+import java.util.UUID;
+
 public interface PostService {
 
-    PostResponse create(Long authorId, String actorUsername, CreatePostRequest request);
+    PostResponse create(UUID authorId, String actorUsername, CreatePostRequest request);
 
-    PostResponse get(Long id);
+    PostResponse get(UUID id);
 
-    Page<PostResponse> feed(String sort, Long communityId, Long authorId, Long userId, String q, Pageable pageable);
+    Page<PostResponse> feed(String sort, UUID communityId, UUID authorId, UUID userId, String q, Pageable pageable);
 
-    void delete(Long id, Long userId);
+    List<PostResponse> related(UUID postId, int limit);
 
-    PostResponse adjustScore(Long id, long delta);
+    void delete(UUID id, UUID userId);
 
-    PostResponse adjustCommentCount(Long id, long delta);
+    PostResponse adjustScore(UUID id, long delta);
+
+    PostResponse adjustCommentCount(UUID id, long delta);
 }

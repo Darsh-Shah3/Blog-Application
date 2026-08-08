@@ -7,7 +7,7 @@ import lombok.Data;
 @Data
 public class SystemNotifyRequest {
     @NotNull
-    private Long userId;
+    private java.util.UUID userId;
     @NotBlank
     private String type;
     @NotBlank

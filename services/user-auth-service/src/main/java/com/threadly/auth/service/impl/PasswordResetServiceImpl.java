@@ -4,9 +4,11 @@ import com.threadly.auth.config.MailAppProperties;
 import com.threadly.auth.dto.ForgotPasswordRequest;
 import com.threadly.auth.dto.MessageResponse;
 import com.threadly.auth.dto.ResetPasswordRequest;
+import com.threadly.auth.entity.PasswordResetRateLimit;
 import com.threadly.auth.entity.PasswordResetToken;
 import com.threadly.auth.entity.User;
 import com.threadly.auth.exception.ApiException;
+import com.threadly.auth.repository.PasswordResetRateLimitRepository;
 import com.threadly.auth.repository.PasswordResetTokenRepository;
 import com.threadly.auth.repository.UserRepository;
 import com.threadly.auth.service.MailService;
@@ -23,6 +25,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Locale;
@@ -34,15 +38,19 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
     private static final Logger log = LoggerFactory.getLogger(PasswordResetServiceImpl.class);
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final int MAX_ATTEMPTS_PER_DAY = 3;
+    private static final long LOCKOUT_SECONDS = 3600L;
 
     private final UserRepository userRepository;
     private final PasswordResetTokenRepository tokenRepository;
+    private final PasswordResetRateLimitRepository rateLimitRepository;
     private final PasswordEncoder passwordEncoder;
     private final MailService mailService;
     private final MailAppProperties mailProps;
 
     /**
-     * Always returns the same generic message to avoid email enumeration.
+     * Always returns the same generic message to avoid email enumeration
+     * (except rate-limit after identity is known).
      */
     @Override
     @Transactional
@@ -57,6 +65,8 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         }
 
         User user = userOpt.get();
+        enforceAndRecordAttempt(user);
+
         tokenRepository.deleteUnusedForUser(user.getId());
 
         String rawToken = generateRawToken();
@@ -64,8 +74,10 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
         tokenRepository.save(PasswordResetToken.builder()
                 .userId(user.getId())
+                .username(user.getUsername())
                 .tokenHash(sha256(rawToken))
                 .expiresAt(expires)
+                .used(false)
                 .build());
 
         String base = mailProps.getFrontendBaseUrl().replaceAll("/$", "");
@@ -79,7 +91,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
                     HttpStatus.SERVICE_UNAVAILABLE.value());
         }
 
-        log.info("Password reset issued userId={} expiresAt={}", user.getId(), expires);
+        log.info("Password reset issued userId={} username={} expiresAt={}", user.getId(), user.getUsername(), expires);
         return MessageResponse.builder().message(generic).build();
     }
 
@@ -87,12 +99,12 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     @Transactional
     public MessageResponse resetPassword(ResetPasswordRequest request) {
         String hash = sha256(request.getToken().trim());
-        PasswordResetToken token = tokenRepository.findByTokenHashAndUsedAtIsNull(hash)
+        PasswordResetToken token = tokenRepository.findByTokenHashAndUsedFalse(hash)
                 .orElseThrow(() -> new ApiException(
                         "Invalid or expired reset link. Request a new one.",
                         HttpStatus.BAD_REQUEST.value()));
 
-        if (token.getExpiresAt().isBefore(Instant.now())) {
+        if (token.isUsed() || token.getExpiresAt().isBefore(Instant.now())) {
             throw new ApiException(
                     "Reset link expired. Request a new one.",
                     HttpStatus.BAD_REQUEST.value());
@@ -108,12 +120,67 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         user.setUpdatedBy(user.getUsername());
         userRepository.save(user);
 
+        token.setUsed(true);
         token.setUsedAt(Instant.now());
         tokenRepository.save(token);
         tokenRepository.deleteUnusedForUser(user.getId());
 
-        log.info("Password reset completed userId={}", user.getId());
+        log.info("Password reset completed userId={} username={}", user.getId(), user.getUsername());
         return MessageResponse.builder().message("Password updated. You can sign in now.").build();
+    }
+
+    /**
+     * Max 3 forgot-password attempts per calendar day (UTC). After the 3rd is used up,
+     * user must wait 1 hour before trying again.
+     */
+    private void enforceAndRecordAttempt(User user) {
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        Instant now = Instant.now();
+
+        PasswordResetRateLimit limit = rateLimitRepository.findById(user.getId())
+                .orElseGet(() -> PasswordResetRateLimit.builder()
+                        .userId(user.getId())
+                        .username(user.getUsername())
+                        .windowDate(today)
+                        .attemptCount(0)
+                        .build());
+
+        if (limit.getLockedUntil() != null && limit.getLockedUntil().isAfter(now)) {
+            throw new ApiException(
+                    "Too many password reset attempts. Try again after 1 hour.",
+                    HttpStatus.TOO_MANY_REQUESTS.value());
+        }
+
+        // New day → reset the daily counter (lock already expired or none)
+        if (!today.equals(limit.getWindowDate())) {
+            limit.setWindowDate(today);
+            limit.setAttemptCount(0);
+            limit.setLockedUntil(null);
+        }
+
+        if (limit.getAttemptCount() >= MAX_ATTEMPTS_PER_DAY) {
+            // Day quota spent and no active lock — open with a fresh 1h lock after 3rd was already spent
+            if (limit.getLockedUntil() == null || !limit.getLockedUntil().isAfter(now)) {
+                // allow if lock expired even same day
+                limit.setAttemptCount(0);
+                limit.setLockedUntil(null);
+            }
+        }
+
+        if (limit.getAttemptCount() >= MAX_ATTEMPTS_PER_DAY) {
+            throw new ApiException(
+                    "Too many password reset attempts. Try again after 1 hour.",
+                    HttpStatus.TOO_MANY_REQUESTS.value());
+        }
+
+        limit.setAttemptCount(limit.getAttemptCount() + 1);
+        limit.setUsername(user.getUsername());
+        limit.setUpdatedAt(now);
+        if (limit.getAttemptCount() >= MAX_ATTEMPTS_PER_DAY) {
+            limit.setLockedUntil(now.plusSeconds(LOCKOUT_SECONDS));
+            log.warn("Password-reset day limit reached userId={} lockedUntil={}", user.getId(), limit.getLockedUntil());
+        }
+        rateLimitRepository.save(limit);
     }
 
     private static String generateRawToken() {

@@ -36,6 +36,7 @@ app:
     post-base-url: ${POST_SERVICE_URL:http://localhost:8083}
     community-base-url: ${COMMUNITY_SERVICE_URL:http://localhost:8082}
     comment-base-url: ${COMMENT_SERVICE_URL:http://localhost:8084}
+  prometheus-base-url: ${PROMETHEUS_URL:http://localhost:9090}
 
 logging:
   level:

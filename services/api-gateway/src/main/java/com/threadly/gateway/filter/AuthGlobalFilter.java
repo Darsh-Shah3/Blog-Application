@@ -1,6 +1,7 @@
 package com.threadly.gateway.filter;
 
 import com.threadly.gateway.security.JwtService;
+import com.threadly.gateway.security.PublicRoutes;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -43,19 +44,6 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     @Value("${app.security.require-jwt-for-all-apis:true}")
     private boolean requireJwtForAllApis;
 
-    private static final List<String> PUBLIC_EXACT = List.of(
-            "/api/v1/auth/signup",
-            "/api/v1/auth/login",
-            "/api/v1/auth/forgot-password",
-            "/api/v1/auth/reset-password"
-    );
-
-    private static final List<String> PUBLIC_PREFIXES = List.of(
-            "/actuator/health",
-            "/actuator/prometheus",
-            "/actuator/info"
-    );
-
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
@@ -87,10 +75,15 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
                     .doFinally(s -> MDC.clear());
         }
 
-        if (isPublic(path)) {
-            log.debug("Public route allowed path={}", path);
+        if (isPublic(request)) {
+            log.debug("Public route allowed path={} method={}", path, method);
             return chain.filter(exchange.mutate().request(mutated.build()).build())
                     .doFinally(s -> MDC.clear());
+        }
+
+        // Specific resource GETs (e.g. /posts/{id}) require login when list GET is public
+        if (!requireJwtForAllApis) {
+            // legacy mode already handled inside PublicRoutes when expanded
         }
 
         String auth = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
@@ -130,23 +123,8 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         }
     }
 
-    private boolean isPublic(String path) {
-        if (PUBLIC_EXACT.stream().anyMatch(path::equals)) {
-            return true;
-        }
-        if (PUBLIC_PREFIXES.stream().anyMatch(path::startsWith)) {
-            return true;
-        }
-        // When requireJwtForAllApis is true (default), no other public routes.
-        return !requireJwtForAllApis && isLegacyPublicGet(path);
-    }
-
-    private boolean isLegacyPublicGet(String path) {
-        return path.startsWith("/api/v1/communities")
-                || path.startsWith("/api/v1/posts")
-                || path.startsWith("/api/v1/comments")
-                || path.startsWith("/api/v1/media")
-                || path.startsWith("/api/v1/profiles");
+    private boolean isPublic(org.springframework.http.server.reactive.ServerHttpRequest request) {
+        return PublicRoutes.isPublic(request);
     }
 
     private Mono<Void> unauthorized(ServerWebExchange exchange, String message) {

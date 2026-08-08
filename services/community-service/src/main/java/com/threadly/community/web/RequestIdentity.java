@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class RequestIdentity {
 
-    public Long requireUserId(Long userIdHeader) {
+    public java.util.UUID requireUserId(java.util.UUID userIdHeader) {
         if (userIdHeader == null) {
             throw new ApiException("Authentication required", HttpStatus.UNAUTHORIZED.value());
         }

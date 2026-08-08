@@ -1,5 +1,6 @@
 package com.threadly.notification.controller;
 
+import com.threadly.notification.dto.CommunityChatEventRequest;
 import com.threadly.notification.dto.NotificationResponse;
 import com.threadly.notification.dto.PostCreatedEventRequest;
 import com.threadly.notification.dto.SystemNotifyRequest;
@@ -30,6 +31,13 @@ public class NotificationController {
         return ResponseEntity.accepted().body(Map.of("status", "accepted"));
     }
 
+    @PostMapping("/api/v1/internal/notifications/community-chat")
+    @PreAuthorize("hasRole('INTERNAL')")
+    public ResponseEntity<Map<String, String>> communityChat(@Valid @RequestBody CommunityChatEventRequest request) {
+        notificationService.onCommunityChatMessage(request);
+        return ResponseEntity.accepted().body(Map.of("status", "accepted"));
+    }
+
     @PostMapping("/api/v1/internal/notifications")
     @PreAuthorize("hasRole('INTERNAL')")
     public ResponseEntity<NotificationResponse> systemNotify(@Valid @RequestBody SystemNotifyRequest request) {
@@ -38,7 +46,7 @@ public class NotificationController {
 
     @GetMapping("/api/v1/notifications")
     public ResponseEntity<Page<NotificationResponse>> list(
-            @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-User-Id", required = false) java.util.UUID userId,
             @RequestParam(defaultValue = "false") boolean unreadOnly,
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String q,
@@ -48,24 +56,24 @@ public class NotificationController {
 
     @GetMapping("/api/v1/notifications/unread-count")
     public ResponseEntity<Map<String, Long>> unreadCount(
-            @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+            @RequestHeader(value = "X-User-Id", required = false) java.util.UUID userId) {
         return ResponseEntity.ok(Map.of("count", notificationService.unreadCount(requireUser(userId))));
     }
 
     @PostMapping("/api/v1/notifications/{id}/read")
     public ResponseEntity<NotificationResponse> markRead(
-            @RequestHeader(value = "X-User-Id", required = false) Long userId,
-            @PathVariable Long id) {
+            @RequestHeader(value = "X-User-Id", required = false) java.util.UUID userId,
+            @PathVariable java.util.UUID id) {
         return ResponseEntity.ok(notificationService.markRead(requireUser(userId), id));
     }
 
     @PostMapping("/api/v1/notifications/read-all")
     public ResponseEntity<Map<String, Integer>> markAll(
-            @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+            @RequestHeader(value = "X-User-Id", required = false) java.util.UUID userId) {
         return ResponseEntity.ok(Map.of("marked", notificationService.markAllRead(requireUser(userId))));
     }
 
-    private Long requireUser(Long userId) {
+    private java.util.UUID requireUser(java.util.UUID userId) {
         if (userId == null) {
             throw new ApiException("Authentication required", 401);
         }

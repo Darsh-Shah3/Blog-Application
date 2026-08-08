@@ -5,8 +5,10 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-threadly}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-threadly_secret}
+    # Host 5433 avoids conflict with a local Windows Postgres on 5432.
+    # Inside Docker the DB still listens on 5432 (services use host "postgres").
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -22,7 +24,7 @@ services:
     image: dpage/pgadmin4:8
     container_name: threadly-pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@threadly.local}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin_secret}
     ports:
       - "${PGADMIN_PORT:-5050}:80"
@@ -91,11 +93,14 @@ services:
       JWT_SECRET: ${JWT_SECRET:-ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
       RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-180}
+      NOTIFICATION_SERVICE_URL: http://notification-service:8088
       JAVA_OPTS: "-Xmx256m -Xms128m"
     ports:
       - "${COMMUNITY_PORT:-8082}:8082"
     depends_on:
       postgres:
+        condition: service_healthy
+      notification-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health || exit 1"]
@@ -256,6 +261,7 @@ services:
       POST_SERVICE_URL: http://post-service:8083
       COMMUNITY_SERVICE_URL: http://community-service:8082
       COMMENT_SERVICE_URL: http://comment-service:8084
+      PROMETHEUS_URL: http://prometheus:9090
       JAVA_OPTS: "-Xmx256m -Xms128m"
     ports:
       - "${AUDIT_PORT:-8087}:8087"
@@ -364,9 +370,15 @@ services:
       context: ./services/frontend
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-}
+        NEXT_PUBLIC_GRAFANA_URL: ${NEXT_PUBLIC_GRAFANA_URL:-http://localhost:3001}
+        NEXT_PUBLIC_PROMETHEUS_URL: ${NEXT_PUBLIC_PROMETHEUS_URL:-http://localhost:9090}
     container_name: threadly-frontend
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-}
+      NEXT_PUBLIC_GRAFANA_URL: ${NEXT_PUBLIC_GRAFANA_URL:-http://localhost:3001}
+      NEXT_PUBLIC_PROMETHEUS_URL: ${NEXT_PUBLIC_PROMETHEUS_URL:-http://localhost:9090}
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:

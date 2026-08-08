@@ -6,15 +6,20 @@ import lombok.Data;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @Data
 @Builder
 public class CommentResponse {
-    private Long id;
-    private Long postId;
-    private Long authorId;
+    private UUID id;
+    private UUID postId;
+    private Map<String, Object> post;
+    private UUID authorId;
     private String authorUsername;
-    private Long parentId;
+    private Map<String, Object> author;
+    private UUID parentId;
+    private Map<String, Object> parent;
     private String content;
     private Long score;
     private Instant createdAt;

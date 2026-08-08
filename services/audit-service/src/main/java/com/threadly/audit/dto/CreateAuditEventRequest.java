@@ -12,9 +12,11 @@ public class CreateAuditEventRequest {
     @NotBlank
     private String resourceType;
     private String resourceId;
-    private Long actorUserId;
+    private java.util.UUID actorUserId;
     private String actorUsername;
     private String summary;
     private String metadata;
+    private String beforeData;
+    private String afterData;
     private String requestId;
 }

@@ -2,10 +2,12 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { api, AuditEvent, friendlyError, Page, PlatformReport, RoleInfo, User } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
 import { isAdmin, roleLabel, ROLES } from '@/lib/rbac';
+import { AdminSkeleton, SpinnerLabel } from '@/components/loaders';
 
 const ALL_ROLES = [ROLES.USER, ROLES.MODERATOR, ROLES.ADMIN];
 
@@ -16,8 +18,8 @@ export default function AdminPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<RoleInfo[]>([]);
   const [q, setQ] = useState('');
-  const [busyId, setBusyId] = useState<number | null>(null);
-  const [selected, setSelected] = useState<Record<number, string[]>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Record<string, string[]>>({});
   const [report, setReport] = useState<PlatformReport | null>(null);
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [auditQ, setAuditQ] = useState('');
@@ -60,7 +62,7 @@ export default function AdminPage() {
       const qs = search.trim() ? `&q=${encodeURIComponent(search.trim())}` : '';
       const page = await api<Page<User>>(`/api/v1/admin/users?size=50${qs}`, {}, token);
       setUsers(page.content || []);
-      const map: Record<number, string[]> = {};
+      const map: Record<string, string[]> = {};
       (page.content || []).forEach((u) => {
         map[u.id] = u.roles?.length ? [...u.roles] : [ROLES.USER];
       });
@@ -80,7 +82,7 @@ export default function AdminPage() {
     }
   }, [token, user?.id]);
 
-  const toggleRole = (userId: number, role: string) => {
+  const toggleRole = (userId: string, role: string) => {
     setSelected((prev) => {
       const current = new Set(prev[userId] || [ROLES.USER]);
       if (current.has(role)) {
@@ -96,7 +98,7 @@ export default function AdminPage() {
     });
   };
 
-  const saveRoles = async (userId: number) => {
+  const saveRoles = async (userId: string) => {
     if (!token) return;
     setBusyId(userId);
     try {
@@ -123,14 +125,17 @@ export default function AdminPage() {
   };
 
   if (loading || !user || !isAdmin(user)) {
-    return <p className="muted" style={{ marginTop: '1.5rem' }}>Checking access…</p>;
+    return <AdminSkeleton />;
   }
 
   return (
     <div style={{ marginTop: '1.25rem' }} className="stack">
       <section className="hero" style={{ paddingTop: '1.5rem' }}>
         <h1>Admin</h1>
-        <p>Roles, platform reports, and a searchable audit trail of create / update / delete events.</p>
+        <p>Roles, platform reports, audit trail, and live ops analytics from Prometheus.</p>
+        <div className="toolbar" style={{ marginTop: '0.75rem' }}>
+          <Link className="btn" href="/admin/analytics">Open analytics dashboard</Link>
+        </div>
       </section>
 
       {report && (
@@ -221,7 +226,7 @@ export default function AdminPage() {
           {users.map((u) => (
             <div key={u.id} className="admin-user-row">
               <div>
-                <strong>u/{u.username}</strong>
+                <strong>{u.username}</strong>
                 <span className="muted"> · {u.email} · karma {u.karma}</span>
                 <div className="role-badges" style={{ marginTop: '0.35rem' }}>
                   {(u.roles || []).map((r) => (
@@ -246,7 +251,7 @@ export default function AdminPage() {
                   disabled={busyId === u.id}
                   onClick={() => saveRoles(u.id)}
                 >
-                  {busyId === u.id ? 'Saving…' : 'Save roles'}
+                  {busyId === u.id ? <SpinnerLabel label="Saving…" /> : 'Save roles'}
                 </button>
               </div>
             </div>

@@ -6,11 +6,15 @@ import { FormEvent, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { friendlyError } from '@/lib/api';
 import { useToast } from '@/lib/toast';
+import { SpinnerLabel } from '@/components/loaders';
+import { useTheme } from '@/lib/theme';
+import { MoonIcon, SunIcon } from '@/components/icons';
 
 export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
   const { success, error } = useToast();
+  const { theme, toggleTheme } = useTheme();
   const [emailOrUsername, setEmailOrUsername] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -30,25 +34,43 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="panel" style={{ maxWidth: 420, margin: '2rem auto' }}>
-      <h1 style={{ fontFamily: 'var(--font-display)', marginTop: 0 }}>Welcome back</h1>
-      <form className="form" onSubmit={onSubmit}>
-        <label>
-          Email or username
-          <input value={emailOrUsername} onChange={(e) => setEmailOrUsername(e.target.value)} required />
-        </label>
-        <label>
-          Password
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        </label>
-        <button className="btn" type="submit" disabled={busy}>{busy ? 'Signing in…' : 'Log in'}</button>
-      </form>
-      <p className="muted">
-        <Link href="/forgot-password">Forgot password?</Link>
-      </p>
-      <p className="muted" style={{ marginBottom: 0 }}>
-        New here? <Link href="/register">Create an account</Link>
-      </p>
+    <div className="auth-page">
+      <button
+        type="button"
+        className="auth-theme-btn"
+        onClick={toggleTheme}
+        aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+      >
+        {theme === 'dark' ? <SunIcon size={18} /> : <MoonIcon size={18} />}
+      </button>
+      <div className="auth-card panel">
+        <Link href="/" className="auth-brand">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand-mark.svg" alt="" width={44} height={44} />
+          <span>Thread<span className="accent">ly</span></span>
+        </Link>
+        <h1>Welcome back</h1>
+        <p className="muted auth-lead">Sign in to join communities and post.</p>
+        <form className="form" onSubmit={onSubmit}>
+          <label>
+            Email or username
+            <input value={emailOrUsername} onChange={(e) => setEmailOrUsername(e.target.value)} required />
+          </label>
+          <label>
+            Password
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          </label>
+          <button className="btn" type="submit" disabled={busy}>
+            {busy ? <SpinnerLabel label="Signing in…" /> : 'Log in'}
+          </button>
+        </form>
+        <p className="muted">
+          <Link href="/forgot-password">Forgot password?</Link>
+        </p>
+        <p className="muted" style={{ marginBottom: 0 }}>
+          New here? <Link href="/register">Create an account</Link>
+        </p>
+      </div>
     </div>
   );
 }

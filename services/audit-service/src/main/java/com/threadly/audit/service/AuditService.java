@@ -13,7 +13,7 @@ public interface AuditService {
 
     Page<AuditEventResponse> search(
             String service, String action, String resourceType,
-            String actorUsername, Long actorUserId, String q,
+            String actorUsername, java.util.UUID actorUserId, String q,
             Instant from, Instant to, Pageable pageable);
 
     PlatformReportResponse platformReport();

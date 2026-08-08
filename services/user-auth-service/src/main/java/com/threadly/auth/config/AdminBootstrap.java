@@ -2,7 +2,9 @@ package com.threadly.auth.config;
 
 import com.threadly.auth.entity.Role;
 import com.threadly.auth.entity.User;
+import com.threadly.auth.entity.UserFollow;
 import com.threadly.auth.repository.RoleRepository;
+import com.threadly.auth.repository.UserFollowRepository;
 import com.threadly.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -13,10 +15,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Seeds a platform admin on first boot so operators can assign roles without SQL.
- * Password only applied when the user is newly created (never overwritten).
- */
 @Component
 @RequiredArgsConstructor
 public class AdminBootstrap implements ApplicationRunner {
@@ -26,6 +24,7 @@ public class AdminBootstrap implements ApplicationRunner {
     private final AdminBootstrapProperties props;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final UserFollowRepository followRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -54,9 +53,13 @@ public class AdminBootstrap implements ApplicationRunner {
                 .createdBy("system")
                 .updatedBy("system")
                 .build();
-        admin.getRoles().add(userRole);
-        admin.getRoles().add(adminRole);
-        userRepository.save(admin);
+        admin.addRole(userRole);
+        admin.addRole(adminRole);
+        admin = userRepository.save(admin);
+        followRepository.save(UserFollow.builder()
+                .userId(admin.getId())
+                .username(admin.getUsername())
+                .build());
         log.warn("Bootstrap admin created username={} — change the password in production", username);
     }
 }

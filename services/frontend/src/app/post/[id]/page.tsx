@@ -2,65 +2,190 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { api, CommentNode, friendlyError, Post } from '@/lib/api';
+import { api, CommentNode, friendlyError, Page, Post } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
 import { canDeleteContent } from '@/lib/rbac';
 import { PostCard } from '@/components/PostCard';
 import Link from 'next/link';
+import { PostDetailSkeleton, SpinnerLabel } from '@/components/loaders';
+
+const COMMENT_PAGE = 25;
+
+function avatarLetter(name?: string | null) {
+  const s = (name || '?').trim();
+  return s ? s[0]!.toUpperCase() : '?';
+}
+
+function relativeTime(iso: string) {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const sec = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (sec < 60) return 'just now';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} minute${min === 1 ? '' : 's'} ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} hour${hr === 1 ? '' : 's'} ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day} day${day === 1 ? '' : 's'} ago`;
+  return new Date(iso).toLocaleDateString();
+}
 
 function CommentTree({
   nodes,
-  onReply,
+  replyToId,
+  replyDraft,
+  setReplyDraft,
+  onStartReply,
+  onCancelReply,
+  onSubmitReply,
   onDelete,
   canDelete,
+  canReply,
+  depth = 0,
+  parentAuthor,
 }: {
   nodes: CommentNode[];
-  onReply: (parentId: number) => void;
-  onDelete: (id: number) => void;
-  canDelete: (authorId: number) => boolean;
+  replyToId: string | null;
+  replyDraft: string;
+  setReplyDraft: (v: string) => void;
+  onStartReply: (id: string) => void;
+  onCancelReply: () => void;
+  onSubmitReply: (parentId: string) => void;
+  onDelete: (id: string) => void;
+  canDelete: (authorId: number | string) => boolean;
+  canReply: boolean;
+  depth?: number;
+  parentAuthor?: string;
 }) {
   return (
-    <>
-      {nodes.map((c) => (
-        <div key={c.id} className="comment">
-          <div className="comment-head">
-            <Link href={`/u/${c.authorUsername || c.authorId}`}>u/{c.authorUsername || c.authorId}</Link>
-            {' · '}{c.score} points · {new Date(c.createdAt).toLocaleString()}
+    <div className={depth === 0 ? 'yt-comment-list' : 'yt-comment-replies'}>
+      {nodes.map((c) => {
+        const name = c.authorUsername || String(c.authorId);
+        const isReplying = replyToId === c.id;
+        return (
+          <div key={c.id} className={`yt-thread ${depth > 0 ? 'yt-thread-nested' : ''}`}>
+            <div className="yt-thread-line" aria-hidden="true" />
+            <div className={`yt-comment ${depth > 0 ? 'yt-comment-nested' : ''}`}>
+              <div className="yt-avatar" aria-hidden="true">{avatarLetter(c.authorUsername)}</div>
+              <div className="yt-comment-body">
+                <div className="yt-comment-meta">
+                  <Link href={`/u/${name}`} className="yt-author">{name}</Link>
+                  {parentAuthor && depth > 0 && (
+                    <span className="yt-reply-to">
+                      replied to <strong>@{parentAuthor}</strong>
+                    </span>
+                  )}
+                  <span className="yt-time">{relativeTime(c.createdAt)}</span>
+                </div>
+                <p className="yt-comment-text">{c.content}</p>
+                <div className="yt-comment-actions">
+                  <span className="yt-likes" title="Score">▲ {c.score}</span>
+                  {canReply && (
+                    <button type="button" className="yt-action-btn" onClick={() => onStartReply(c.id)}>
+                      Reply
+                    </button>
+                  )}
+                  {canDelete(c.authorId) && (
+                    <button type="button" className="yt-action-btn" onClick={() => onDelete(c.id)}>
+                      Delete
+                    </button>
+                  )}
+                </div>
+
+                {isReplying && (
+                  <form
+                    className="yt-inline-reply"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      onSubmitReply(c.id);
+                    }}
+                  >
+                    <p className="muted yt-inline-reply-label">
+                      Replying to <strong>{name}</strong>
+                    </p>
+                    <textarea
+                      value={replyDraft}
+                      onChange={(e) => setReplyDraft(e.target.value)}
+                      placeholder={`Reply to ${name}…`}
+                      required
+                      rows={2}
+                      autoFocus
+                    />
+                    <div className="yt-inline-reply-actions">
+                      <button type="button" className="btn ghost" onClick={onCancelReply}>Cancel</button>
+                      <button type="submit" className="btn">Reply</button>
+                    </div>
+                  </form>
+                )}
+
+                {c.replies?.length > 0 && (
+                  <CommentTree
+                    nodes={c.replies}
+                    replyToId={replyToId}
+                    replyDraft={replyDraft}
+                    setReplyDraft={setReplyDraft}
+                    onStartReply={onStartReply}
+                    onCancelReply={onCancelReply}
+                    onSubmitReply={onSubmitReply}
+                    onDelete={onDelete}
+                    canDelete={canDelete}
+                    canReply={canReply}
+                    depth={depth + 1}
+                    parentAuthor={name}
+                  />
+                )}
+              </div>
+            </div>
           </div>
-          <div style={{ whiteSpace: 'pre-wrap' }}>{c.content}</div>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <button className="btn ghost" type="button" onClick={() => onReply(c.id)}>Reply</button>
-            {canDelete(c.authorId) && (
-              <button className="btn ghost" type="button" onClick={() => onDelete(c.id)}>Delete</button>
-            )}
-          </div>
-          {c.replies?.length > 0 && (
-            <CommentTree nodes={c.replies} onReply={onReply} onDelete={onDelete} canDelete={canDelete} />
-          )}
-        </div>
-      ))}
-    </>
+        );
+      })}
+    </div>
   );
 }
 
 export default function PostDetailPage() {
   const params = useParams<{ id: string }>();
-  const { token, user } = useAuth();
+  const { token, user, loading: authLoading } = useAuth();
   const { success, error, confirm } = useToast();
   const [post, setPost] = useState<Post | null>(null);
+  const [related, setRelated] = useState<Post[]>([]);
   const [comments, setComments] = useState<CommentNode[]>([]);
+  const [commentPage, setCommentPage] = useState(0);
+  const [hasMoreComments, setHasMoreComments] = useState(false);
   const [content, setContent] = useState('');
-  const [parentId, setParentId] = useState<number | null>(null);
+  const [parentId, setParentId] = useState<string | null>(null);
+  const [replyDraft, setReplyDraft] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const loadComments = async (pageNum = 0, append = false) => {
+    if (append) setLoadingComments(true);
+    try {
+      const page = await api<Page<CommentNode>>(
+        `/api/v1/comments/threads/${params.id}?page=${pageNum}&size=${COMMENT_PAGE}`,
+        {},
+        token
+      );
+      const batch = page.content || [];
+      setComments((prev) => (append ? [...prev, ...batch] : batch));
+      setCommentPage(pageNum);
+      setHasMoreComments(!page.last && batch.length >= COMMENT_PAGE);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
     try {
       const p = await api<Post>(`/api/v1/posts/${params.id}`, {}, token);
       setPost(p);
-      const tree = await api<CommentNode[]>(`/api/v1/comments/threads/${params.id}`, {}, token);
-      setComments(tree || []);
+      await loadComments(0, false);
+      api<Post[]>(`/api/v1/posts/${params.id}/related?limit=6`, {}, token)
+        .then((r) => setRelated(r || []))
+        .catch(() => setRelated([]));
     } catch (e) {
       error(friendlyError(e, 'Could not load post.'));
       setPost(null);
@@ -70,10 +195,12 @@ export default function PostDetailPage() {
   };
 
   useEffect(() => {
-    if (params.id) load();
-  }, [params.id, token]);
+    if (!params.id || authLoading) return;
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.id, token, authLoading]);
 
-  const submit = async (e: FormEvent) => {
+  const submitTopLevel = async (e: FormEvent) => {
     e.preventDefault();
     if (!token || !post) {
       error('Please sign in to comment.');
@@ -82,18 +209,39 @@ export default function PostDetailPage() {
     try {
       await api('/api/v1/comments', {
         method: 'POST',
-        body: JSON.stringify({ postId: post.id, parentId, content }),
+        body: JSON.stringify({ postId: post.id, parentId: null, content }),
       }, token);
       setContent('');
-      setParentId(null);
       success('Comment posted.');
-      load();
+      await loadComments(0, false);
+      setPost((prev) => prev ? { ...prev, commentCount: prev.commentCount + 1 } : prev);
     } catch (err) {
       error(friendlyError(err, 'Could not post comment.'));
     }
   };
 
-  const deleteComment = async (id: number) => {
+  const submitReply = async (parent: string) => {
+    if (!token || !post) {
+      error('Please sign in to reply.');
+      return;
+    }
+    if (!replyDraft.trim()) return;
+    try {
+      await api('/api/v1/comments', {
+        method: 'POST',
+        body: JSON.stringify({ postId: post.id, parentId: parent, content: replyDraft }),
+      }, token);
+      setReplyDraft('');
+      setParentId(null);
+      success('Reply posted.');
+      await loadComments(0, false);
+      setPost((prev) => prev ? { ...prev, commentCount: prev.commentCount + 1 } : prev);
+    } catch (err) {
+      error(friendlyError(err, 'Could not post reply.'));
+    }
+  };
+
+  const deleteComment = async (id: string) => {
     if (!token) return;
     const ok = await confirm({
       title: 'Delete comment?',
@@ -104,58 +252,138 @@ export default function PostDetailPage() {
     try {
       await api(`/api/v1/comments/${id}`, { method: 'DELETE' }, token);
       success('Comment deleted.');
-      load();
+      await loadComments(0, false);
     } catch (e) {
       error(friendlyError(e, 'Could not delete comment.'));
     }
   };
 
-  if (loading && !post) {
-    return <p className="muted" style={{ marginTop: '1.5rem' }}>Loading post…</p>;
+  if (authLoading || (loading && !post)) {
+    return <PostDetailSkeleton />;
   }
+
   if (!post) {
     return (
       <div className="panel" style={{ marginTop: '1.5rem' }}>
-        <p>Post not found.</p>
-        <Link href="/" className="btn secondary">Home</Link>
+        <h1 style={{ fontFamily: 'var(--font-display)', marginTop: 0 }}>Post not found</h1>
+        <p className="muted">It may have been removed, or the link is incomplete.</p>
+        <div className="toolbar">
+          <Link href="/feed" className="btn">Back to posts</Link>
+          <Link href="/communities" className="btn secondary">Communities</Link>
+        </div>
       </div>
     );
   }
 
+  const full = post.content || '';
+  const isLong = full.length > 400;
+  const shown = expanded || !isLong ? full : `${full.slice(0, 400)}…`;
+  const totalComments = post.commentCount ?? comments.length;
+  const nextPostQuery = typeof window !== 'undefined'
+    ? `?next=${encodeURIComponent(`/post/${post.id}`)}`
+    : '';
+
   return (
     <div style={{ marginTop: '1.25rem' }} className="stack">
-      <PostCard post={post} onScoreChange={setPost} />
-      <section className="panel">
+      <Link href="/feed" className="muted" style={{ fontSize: '0.9rem' }}>← Posts</Link>
+
+      {!user && (
+        <div className="panel feed-guest-banner guest-post-banner">
+          <div>
+            <strong>Reading as a guest</strong>
+            <p className="muted" style={{ margin: '0.25rem 0 0' }}>
+              You can read this post and its comments. Sign in to vote, reply, or join the conversation.
+            </p>
+          </div>
+          <div className="toolbar" style={{ margin: 0 }}>
+            <Link className="btn" href={`/login${nextPostQuery}`}>Log in</Link>
+            <Link className="btn secondary" href={`/register${nextPostQuery}`}>Sign up</Link>
+          </div>
+        </div>
+      )}
+
+      <PostCard post={post} onScoreChange={setPost} expandedBody />
+      {full && (
+        <section className="panel post-body">
+          <h2 style={{ fontFamily: 'var(--font-display)', marginTop: 0 }}>{post.title}</h2>
+          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{shown}</div>
+          {isLong && (
+            <button type="button" className="btn ghost" style={{ marginTop: '0.75rem' }} onClick={() => setExpanded((v) => !v)}>
+              {expanded ? 'Show less' : 'Read more'}
+            </button>
+          )}
+        </section>
+      )}
+      <section className="panel yt-comments-panel">
         <h2 style={{ fontFamily: 'var(--font-display)', marginTop: 0 }}>
-          Comments {parentId ? <span className="muted">(replying to #{parentId})</span> : null}
+          {totalComments} {totalComments === 1 ? 'Comment' : 'Comments'}
         </h2>
         {user ? (
-          <form className="form" onSubmit={submit}>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Add to the discussion"
-              required
-            />
-            <div className="toolbar">
-              <button className="btn" type="submit">Comment</button>
-              {parentId && (
-                <button className="btn secondary" type="button" onClick={() => setParentId(null)}>
-                  Cancel reply
-                </button>
-              )}
+          <form className="yt-composer" onSubmit={submitTopLevel}>
+            <div className="yt-avatar yt-avatar-self" aria-hidden="true">
+              {avatarLetter(user.username)}
+            </div>
+            <div className="yt-composer-fields">
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="Add a comment…"
+                required
+                rows={2}
+              />
+              <div className="yt-composer-actions">
+                <button className="btn" type="submit">Comment</button>
+              </div>
             </div>
           </form>
         ) : (
-          <p className="muted">Log in to comment.</p>
+          <p className="muted">
+            <Link href={`/login${nextPostQuery}`}>Log in</Link> to leave a comment.
+          </p>
         )}
-        <CommentTree
-          nodes={comments}
-          onReply={setParentId}
-          onDelete={deleteComment}
-          canDelete={(authorId) => canDeleteContent(user, authorId)}
-        />
+        {comments.length === 0 ? (
+          <p className="muted" style={{ marginTop: '1rem' }}>No comments yet. Be the first to reply.</p>
+        ) : (
+          <CommentTree
+            nodes={comments}
+            replyToId={parentId}
+            replyDraft={replyDraft}
+            setReplyDraft={setReplyDraft}
+            onStartReply={(id) => {
+              setParentId(id);
+              setReplyDraft('');
+            }}
+            onCancelReply={() => {
+              setParentId(null);
+              setReplyDraft('');
+            }}
+            onSubmitReply={submitReply}
+            onDelete={deleteComment}
+            canDelete={(authorId) => canDeleteContent(user, authorId)}
+            canReply={Boolean(user)}
+          />
+        )}
+        {hasMoreComments && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+            <button
+              type="button"
+              className="btn secondary"
+              disabled={loadingComments}
+              onClick={() => loadComments(commentPage + 1, true)}
+            >
+              {loadingComments ? <SpinnerLabel label="Loading comments…" /> : 'Load more comments'}
+            </button>
+          </div>
+        )}
       </section>
+      {related.length > 0 && (
+        <section className="stack">
+          <h2 style={{ fontFamily: 'var(--font-display)', marginBottom: 0 }}>Related in this community</h2>
+          {related.map((p) => (
+            <PostCard key={p.id} post={p} />
+          ))}
+        </section>
+      )}
     </div>
   );
 }

@@ -2,18 +2,23 @@ package com.threadly.comment.service;
 
 import com.threadly.comment.dto.CommentResponse;
 import com.threadly.comment.dto.CreateCommentRequest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
-import java.util.List;
+import java.util.UUID;
 
 public interface CommentService {
 
-    CommentResponse create(Long authorId, String actorUsername, CreateCommentRequest request);
+    CommentResponse create(UUID authorId, String actorUsername, CreateCommentRequest request);
 
-    List<CommentResponse> treeForPost(Long postId);
+    /**
+     * Page of top-level comments with nested replies attached (YouTube-style).
+     */
+    Page<CommentResponse> pageRoots(UUID postId, Pageable pageable);
 
-    void delete(Long id, Long userId);
+    void delete(UUID id, UUID userId);
 
-    CommentResponse adjustScore(Long id, long delta);
+    CommentResponse adjustScore(UUID id, long delta);
 
-    CommentResponse get(Long id);
+    CommentResponse get(UUID id);
 }

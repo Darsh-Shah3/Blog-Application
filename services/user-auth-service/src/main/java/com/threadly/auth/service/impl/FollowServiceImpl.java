@@ -5,6 +5,7 @@ import com.threadly.auth.dto.FollowerContactResponse;
 import com.threadly.auth.dto.UserResponse;
 import com.threadly.auth.entity.User;
 import com.threadly.auth.entity.UserFollow;
+import com.threadly.auth.entity.UserFollow.FollowContact;
 import com.threadly.auth.exception.ApiException;
 import com.threadly.auth.mapper.UserMapper;
 import com.threadly.auth.repository.UserFollowRepository;
@@ -17,7 +18,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -31,43 +35,55 @@ public class FollowServiceImpl implements FollowService {
 
     @Override
     @Transactional
-    public FollowStatusResponse follow(Long followerId, String targetUsername) {
+    public FollowStatusResponse follow(UUID followerId, String targetUsername) {
+        User follower = findActiveById(followerId);
         User target = findActiveByUsername(targetUsername);
-        if (target.getId().equals(followerId)) {
+        if (follower.getId().equals(target.getId())) {
             throw new ApiException("Cannot follow yourself", HttpStatus.BAD_REQUEST.value());
         }
-        if (!followRepository.existsByFollowerIdAndFollowingId(followerId, target.getId())) {
-            followRepository.save(UserFollow.builder()
-                    .followerId(followerId)
-                    .followingId(target.getId())
-                    .build());
-            log.info("User {} followed {}", followerId, target.getUsername());
+
+        UserFollow followerRow = ensureRow(follower);
+        UserFollow targetRow = ensureRow(target);
+
+        if (!contains(followerRow.getFollowing(), target.getId())) {
+            followerRow.getFollowing().add(contact(target));
+            targetRow.getFollowers().add(contact(follower));
+            followRepository.save(followerRow);
+            followRepository.save(targetRow);
+            log.info("User {} followed {}", follower.getUsername(), target.getUsername());
         }
         return status(followerId, target.getUsername());
     }
 
     @Override
     @Transactional
-    public FollowStatusResponse unfollow(Long followerId, String targetUsername) {
+    public FollowStatusResponse unfollow(UUID followerId, String targetUsername) {
+        User follower = findActiveById(followerId);
         User target = findActiveByUsername(targetUsername);
-        followRepository.findByFollowerIdAndFollowingId(followerId, target.getId())
-                .ifPresent(followRepository::delete);
-        log.info("User {} unfollowed {}", followerId, target.getUsername());
+
+        UserFollow followerRow = ensureRow(follower);
+        UserFollow targetRow = ensureRow(target);
+
+        followerRow.setFollowing(remove(followerRow.getFollowing(), target.getId()));
+        targetRow.setFollowers(remove(targetRow.getFollowers(), follower.getId()));
+        followRepository.save(followerRow);
+        followRepository.save(targetRow);
+        log.info("User {} unfollowed {}", follower.getUsername(), target.getUsername());
         return status(followerId, target.getUsername());
     }
 
     @Override
     @Transactional(readOnly = true)
-    public FollowStatusResponse status(Long viewerId, String targetUsername) {
+    public FollowStatusResponse status(UUID viewerId, String targetUsername) {
         User target = findActiveByUsername(targetUsername);
-        boolean following = viewerId != null
-                && followRepository.existsByFollowerIdAndFollowingId(viewerId, target.getId());
+        UserFollow targetRow = ensureRow(target);
+        boolean following = viewerId != null && contains(ensureRow(findActiveById(viewerId)).getFollowing(), target.getId());
         return FollowStatusResponse.builder()
                 .userId(target.getId())
                 .username(target.getUsername())
                 .following(following)
-                .followerCount(followRepository.countByFollowingId(target.getId()))
-                .followingCount(followRepository.countByFollowerId(target.getId()))
+                .followerCount(safeList(targetRow.getFollowers()).size())
+                .followingCount(safeList(targetRow.getFollowing()).size())
                 .build();
     }
 
@@ -75,9 +91,12 @@ public class FollowServiceImpl implements FollowService {
     @Transactional(readOnly = true)
     public List<UserResponse> followers(String username) {
         User target = findActiveByUsername(username);
-        return followRepository.findByFollowingIdOrderByCreatedAtDesc(target.getId()).stream()
-                .map(f -> userRepository.findById(f.getFollowerId()).orElse(null))
-                .filter(u -> u != null && !u.isDeleted())
+        return safeList(ensureRow(target).getFollowers()).stream()
+                .map(c -> parseUuid(c.getId()))
+                .filter(Objects::nonNull)
+                .map(userRepository::findById)
+                .flatMap(OptionalToStream())
+                .filter(u -> !u.isDeleted())
                 .map(userMapper::toResponse)
                 .toList();
     }
@@ -86,23 +105,95 @@ public class FollowServiceImpl implements FollowService {
     @Transactional(readOnly = true)
     public List<UserResponse> following(String username) {
         User target = findActiveByUsername(username);
-        return followRepository.findByFollowerIdOrderByCreatedAtDesc(target.getId()).stream()
-                .map(f -> userRepository.findById(f.getFollowingId()).orElse(null))
-                .filter(u -> u != null && !u.isDeleted())
+        return safeList(ensureRow(target).getFollowing()).stream()
+                .map(c -> parseUuid(c.getId()))
+                .filter(Objects::nonNull)
+                .map(userRepository::findById)
+                .flatMap(OptionalToStream())
+                .filter(u -> !u.isDeleted())
                 .map(userMapper::toResponse)
                 .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<FollowerContactResponse> internalFollowers(Long userId) {
-        return followRepository.findActiveFollowers(userId).stream()
+    public List<FollowerContactResponse> internalFollowers(UUID userId) {
+        User user = findActiveById(userId);
+        return contactsToResponses(ensureRow(user).getFollowers());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<FollowerContactResponse> internalFollowing(UUID userId) {
+        User user = findActiveById(userId);
+        return contactsToResponses(ensureRow(user).getFollowing());
+    }
+
+    private List<FollowerContactResponse> contactsToResponses(List<FollowContact> contacts) {
+        return safeList(contacts).stream()
+                .map(c -> parseUuid(c.getId()))
+                .filter(Objects::nonNull)
+                .map(userRepository::findById)
+                .flatMap(OptionalToStream())
+                .filter(u -> !u.isDeleted())
                 .map(u -> FollowerContactResponse.builder()
                         .id(u.getId())
                         .username(u.getUsername())
                         .email(u.getEmail())
                         .build())
                 .toList();
+    }
+
+    private UserFollow ensureRow(User user) {
+        return followRepository.findByUserId(user.getId())
+                .orElseGet(() -> followRepository.save(UserFollow.builder()
+                        .userId(user.getId())
+                        .username(user.getUsername())
+                        .followers(new ArrayList<>())
+                        .following(new ArrayList<>())
+                        .build()));
+    }
+
+    private static FollowContact contact(User user) {
+        return FollowContact.builder()
+                .id(user.getId().toString())
+                .username(user.getUsername())
+                .build();
+    }
+
+    private static boolean contains(List<FollowContact> list, UUID id) {
+        String key = id.toString();
+        return safeList(list).stream().anyMatch(c -> key.equals(c.getId()));
+    }
+
+    private static List<FollowContact> remove(List<FollowContact> list, UUID id) {
+        String key = id.toString();
+        return new ArrayList<>(safeList(list).stream().filter(c -> !key.equals(c.getId())).toList());
+    }
+
+    private static List<FollowContact> safeList(List<FollowContact> list) {
+        return list == null ? List.of() : list;
+    }
+
+    private static UUID parseUuid(String raw) {
+        try {
+            return raw == null ? null : UUID.fromString(raw);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static java.util.function.Function<java.util.Optional<User>, java.util.stream.Stream<User>> OptionalToStream() {
+        return opt -> opt.map(java.util.stream.Stream::of).orElseGet(java.util.stream.Stream::empty);
+    }
+
+    private User findActiveById(UUID id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ApiException("User not found", HttpStatus.NOT_FOUND.value()));
+        if (user.isDeleted()) {
+            throw new ApiException("User not found", HttpStatus.NOT_FOUND.value());
+        }
+        return user;
     }
 
     private User findActiveByUsername(String username) {

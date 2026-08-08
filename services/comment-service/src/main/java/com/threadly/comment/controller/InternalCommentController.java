@@ -11,6 +11,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
@@ -22,7 +23,7 @@ public class InternalCommentController {
 
     @PostMapping("/api/v1/internal/comments/{id}/score-delta")
     public ResponseEntity<CommentResponse> applyScoreDelta(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody ScoreDeltaRequest request) {
         return ResponseEntity.ok(commentService.adjustScore(id, request.getDelta()));
     }

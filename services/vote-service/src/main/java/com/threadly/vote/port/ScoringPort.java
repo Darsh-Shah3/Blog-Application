@@ -2,15 +2,16 @@ package com.threadly.vote.port;
 
 import com.threadly.vote.entity.Vote;
 
-/**
- * Fan-out port for score/karma side effects.
- * Vote domain owns the vote row; other services only receive additive deltas.
- */
+import java.util.UUID;
+
 public interface ScoringPort {
 
-    Long resolveAuthorId(Vote.TargetType type, Long targetId);
+    UUID resolveAuthorId(Vote.TargetType type, UUID targetId);
 
-    void applyScoreDelta(Vote.TargetType type, Long targetId, long delta);
+    /** Optional title/preview for denormalized vote.target JSON. */
+    String resolveTargetName(Vote.TargetType type, UUID targetId);
 
-    void applyKarmaDelta(Long authorId, long delta);
+    void applyScoreDelta(Vote.TargetType type, UUID targetId, long delta);
+
+    void applyKarmaDelta(UUID authorId, long delta);
 }

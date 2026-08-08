@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/communities")
@@ -25,64 +26,81 @@ public class CommunityController {
 
     @PostMapping
     public ResponseEntity<CommunityResponse> create(
-            @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
             @RequestHeader(value = "X-Username", required = false) String username,
             @Valid @RequestBody CreateCommunityRequest request) {
-        Long uid = requestIdentity.requireUserId(userId);
-        return ResponseEntity.status(HttpStatus.CREATED).body(communityService.create(uid, username, request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                communityService.create(requestIdentity.requireUserId(userId), username, request));
     }
 
     @GetMapping
     public ResponseEntity<Page<CommunityResponse>> list(
             @RequestParam(required = false) String q,
-            @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(communityService.list(q, userId, pageable));
     }
 
+    @GetMapping("/discover")
+    public ResponseEntity<Page<CommunityResponse>> discover(
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @PageableDefault(size = 12) Pageable pageable) {
+        return ResponseEntity.ok(communityService.discover(userId, pageable));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<CommunityResponse> getById(
-            @PathVariable Long id,
-            @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+            @PathVariable UUID id,
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId) {
         return ResponseEntity.ok(communityService.getById(id, userId));
     }
 
     @GetMapping("/by-slug/{slug}")
     public ResponseEntity<CommunityResponse> getBySlug(
             @PathVariable String slug,
-            @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId) {
         return ResponseEntity.ok(communityService.getBySlug(slug, userId));
     }
 
     @PostMapping("/{id}/join")
     public ResponseEntity<CommunityResponse> join(
-            @PathVariable Long id,
-            @RequestHeader(value = "X-User-Id", required = false) Long userId) {
-        return ResponseEntity.ok(communityService.join(id, requestIdentity.requireUserId(userId)));
+            @PathVariable UUID id,
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @RequestHeader(value = "X-Username", required = false) String username) {
+        return ResponseEntity.ok(communityService.join(id, requestIdentity.requireUserId(userId), username));
     }
 
     @PostMapping("/{id}/leave")
     public ResponseEntity<CommunityResponse> leave(
-            @PathVariable Long id,
-            @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+            @PathVariable UUID id,
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId) {
         return ResponseEntity.ok(communityService.leave(id, requestIdentity.requireUserId(userId)));
     }
 
     @GetMapping("/{id}/members")
-    public ResponseEntity<List<Long>> members(@PathVariable Long id) {
-        return ResponseEntity.ok(communityService.memberIds(id));
+    public ResponseEntity<Page<UUID>> members(
+            @PathVariable UUID id,
+            @PageableDefault(size = 50) Pageable pageable) {
+        return ResponseEntity.ok(communityService.memberIds(id, pageable));
     }
 
-    /** Community IDs the user has joined (used for personalized home feed). */
     @GetMapping("/memberships/user/{userId}")
-    public ResponseEntity<List<Long>> membershipsByUser(@PathVariable Long userId) {
+    public ResponseEntity<List<UUID>> membershipsByUser(@PathVariable UUID userId) {
+        // Keep full list for internal feed personalization (bounded by user's join count).
         return ResponseEntity.ok(communityService.joinedCommunityIds(userId));
+    }
+
+    @GetMapping("/memberships/user/{userId}/page")
+    public ResponseEntity<Page<UUID>> membershipsByUserPage(
+            @PathVariable UUID userId,
+            @PageableDefault(size = 50) Pageable pageable) {
+        return ResponseEntity.ok(communityService.joinedCommunityIds(userId, pageable));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
-            @PathVariable Long id,
-            @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+            @PathVariable UUID id,
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId) {
         communityService.delete(id, requestIdentity.requireUserId(userId));
         return ResponseEntity.noContent().build();
     }

@@ -3,9 +3,10 @@ package com.threadly.auth.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "users")
@@ -16,8 +17,8 @@ import java.util.Set;
 @Builder
 public class User {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     /** Uniqueness is DB partial index (active rows only) — not JPA unique. */
     @Column(nullable = false, length = 50)
@@ -35,6 +36,10 @@ public class User {
     @Column(length = 500)
     private String bio;
 
+    /**
+     * Reputation score (Reddit-style “karma”). Increased/decreased by the vote-service
+     * via internal API when others upvote/downvote this user's posts or comments.
+     */
     @Column(nullable = false)
     @Builder.Default
     private Long karma = 0L;
@@ -47,24 +52,60 @@ public class User {
 
     /** Soft-delete marker; null = active. */
     @Column(name = "deleted_at")
-    private Instant deletedAt;
+    private java.time.Instant deletedAt;
 
     @Column(name = "created_at", nullable = false)
     @Builder.Default
-    private Instant createdAt = Instant.now();
+    private java.time.Instant createdAt = java.time.Instant.now();
 
     @Column(name = "updated_at", nullable = false)
     @Builder.Default
-    private Instant updatedAt = Instant.now();
+    private java.time.Instant updatedAt = java.time.Instant.now();
 
-    @ManyToMany(fetch = FetchType.EAGER)
-    @JoinTable(
-            name = "user_roles",
-            joinColumns = @JoinColumn(name = "user_id"),
-            inverseJoinColumns = @JoinColumn(name = "role_id")
-    )
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @Builder.Default
-    private Set<Role> roles = new HashSet<>();
+    private Set<UserRole> userRoles = new HashSet<>();
+
+    /** Role entities derived from denormalized user_roles rows. */
+    public Set<Role> getRoles() {
+        if (userRoles == null || userRoles.isEmpty()) {
+            return new HashSet<>();
+        }
+        return userRoles.stream().map(UserRole::getRole).collect(Collectors.toCollection(HashSet::new));
+    }
+
+    public void replaceRoles(Set<Role> roles) {
+        if (userRoles == null) {
+            userRoles = new HashSet<>();
+        }
+        userRoles.clear();
+        if (roles == null) {
+            return;
+        }
+        for (Role role : roles) {
+            userRoles.add(UserRole.builder()
+                    .user(this)
+                    .role(role)
+                    .username(this.username)
+                    .roleName(role.getName())
+                    .build());
+        }
+    }
+
+    public void addRole(Role role) {
+        if (userRoles == null) {
+            userRoles = new HashSet<>();
+        }
+        boolean exists = userRoles.stream().anyMatch(ur -> ur.getRole().getId().equals(role.getId()));
+        if (!exists) {
+            userRoles.add(UserRole.builder()
+                    .user(this)
+                    .role(role)
+                    .username(this.username)
+                    .roleName(role.getName())
+                    .build());
+        }
+    }
 
     public boolean isDeleted() {
         return deletedAt != null;
@@ -72,6 +113,6 @@ public class User {
 
     @PreUpdate
     void onUpdate() {
-        updatedAt = Instant.now();
+        updatedAt = java.time.Instant.now();
     }
 }

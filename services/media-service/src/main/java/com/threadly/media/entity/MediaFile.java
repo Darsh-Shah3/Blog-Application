@@ -2,8 +2,12 @@ package com.threadly.media.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.Map;
+import java.util.UUID;
 
 @Entity
 @Table(name = "media_files")
@@ -14,25 +18,29 @@ import java.time.Instant;
 @Builder
 public class MediaFile {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(name = "original_name", nullable = false, length = 500)
     private String originalName;
 
-    @Column(name = "stored_name", nullable = false, unique = true, length = 200)
+    @Column(name = "stored_name", nullable = false, unique = true, length = 255)
     private String storedName;
 
-    @Column(name = "content_type", nullable = false, length = 100)
+    @Column(name = "content_type", nullable = false, length = 200)
     private String contentType;
 
     @Column(name = "size_bytes", nullable = false)
     private Long sizeBytes;
 
-    @Column(name = "uploader_id", nullable = false)
-    private Long uploaderId;
+    /** Uploader: {id, username}. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(nullable = false, columnDefinition = "jsonb")
+    private Map<String, Object> uploader;
 
-    /** IMAGE | VIDEO | AUDIO | DOCUMENT | ARCHIVE | OTHER */
+    @Column(name = "uploader_id", nullable = false)
+    private UUID uploaderId;
+
     @Column(name = "media_kind", nullable = false, length = 20)
     @Builder.Default
     private String mediaKind = "OTHER";
@@ -46,4 +54,13 @@ public class MediaFile {
     @Column(name = "created_at", nullable = false)
     @Builder.Default
     private Instant createdAt = Instant.now();
+
+    @Column(name = "updated_at", nullable = false)
+    @Builder.Default
+    private Instant updatedAt = Instant.now();
+
+    @PreUpdate
+    void onUpdate() {
+        updatedAt = Instant.now();
+    }
 }

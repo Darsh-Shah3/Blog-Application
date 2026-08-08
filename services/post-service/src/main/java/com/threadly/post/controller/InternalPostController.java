@@ -12,10 +12,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.UUID;
 
-/**
- * Cross-service post mutations (score / comment count). Not exposed via the public gateway.
- */
 @RestController
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('INTERNAL')")
@@ -26,14 +24,14 @@ public class InternalPostController {
 
     @PostMapping("/api/v1/internal/posts/{id}/score-delta")
     public ResponseEntity<PostResponse> applyScoreDelta(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody ScoreDeltaRequest request) {
         return ResponseEntity.ok(postService.adjustScore(id, request.getDelta()));
     }
 
     @PostMapping("/api/v1/internal/posts/{id}/comment-count-delta")
     public ResponseEntity<PostResponse> applyCommentCountDelta(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody CommentCountDeltaRequest request) {
         return ResponseEntity.ok(postService.adjustCommentCount(id, request.getDelta()));
     }

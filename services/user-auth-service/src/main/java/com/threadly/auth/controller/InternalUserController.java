@@ -14,10 +14,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
-/**
- * Service-to-service user APIs (internal API key only).
- */
 @RestController
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('INTERNAL')")
@@ -29,20 +27,24 @@ public class InternalUserController {
 
     @PostMapping("/api/v1/internal/users/{id}/karma-delta")
     public ResponseEntity<UserResponse> applyKarmaDelta(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody KarmaDeltaRequest request) {
         return ResponseEntity.ok(authService.adjustKarma(id, request.getDelta()));
     }
 
     @GetMapping("/api/v1/internal/users/{id}")
-    public ResponseEntity<UserResponse> getUser(@PathVariable Long id) {
+    public ResponseEntity<UserResponse> getUser(@PathVariable UUID id) {
         return ResponseEntity.ok(authService.getById(id));
     }
 
-    /** Active followers with email — used by notification fan-out. */
     @GetMapping("/api/v1/internal/users/{id}/followers")
-    public ResponseEntity<List<FollowerContactResponse>> followers(@PathVariable Long id) {
+    public ResponseEntity<List<FollowerContactResponse>> followers(@PathVariable UUID id) {
         return ResponseEntity.ok(followService.internalFollowers(id));
+    }
+
+    @GetMapping("/api/v1/internal/users/{id}/following")
+    public ResponseEntity<List<FollowerContactResponse>> following(@PathVariable UUID id) {
+        return ResponseEntity.ok(followService.internalFollowing(id));
     }
 
     @GetMapping("/api/v1/internal/stats/users")

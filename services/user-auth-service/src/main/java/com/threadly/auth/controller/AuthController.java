@@ -10,10 +10,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * Authentication and the signed-in user's own profile.
- * Public identity is served under {@code /api/v1/profiles/**}.
- */
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
@@ -32,22 +30,19 @@ public class AuthController {
         return ResponseEntity.ok(authService.login(request));
     }
 
-    /** Request a password-reset email (or log reset link when SMTP is disabled). */
     @PostMapping("/forgot-password")
     public ResponseEntity<MessageResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         return ResponseEntity.ok(passwordResetService.forgotPassword(request));
     }
 
-    /** Consume reset token and set a new password. */
     @PostMapping("/reset-password")
     public ResponseEntity<MessageResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         return ResponseEntity.ok(passwordResetService.resetPassword(request));
     }
 
-    /** Current JWT subject (session identity + roles). */
     @GetMapping("/session")
     public ResponseEntity<UserResponse> session(Authentication authentication) {
-        Long userId = Long.parseLong(authentication.getName());
+        UUID userId = UUID.fromString(authentication.getName());
         return ResponseEntity.ok(authService.getById(userId));
     }
 
@@ -55,14 +50,13 @@ public class AuthController {
     public ResponseEntity<UserResponse> updateProfile(
             Authentication authentication,
             @Valid @RequestBody UpdateProfileRequest request) {
-        Long userId = Long.parseLong(authentication.getName());
+        UUID userId = UUID.fromString(authentication.getName());
         return ResponseEntity.ok(authService.updateProfile(userId, request));
     }
 
-    /** Soft-delete the signed-in account. Username and email become available again. */
     @DeleteMapping("/account")
     public ResponseEntity<Void> deleteAccount(Authentication authentication) {
-        Long userId = Long.parseLong(authentication.getName());
+        UUID userId = UUID.fromString(authentication.getName());
         authService.softDeleteAccount(userId);
         return ResponseEntity.noContent().build();
     }

@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: community-service
+  data:
+    web:
+      pageable:
+        max-page-size: 50
+        default-page-size: 20
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:community_db}
     username: ${POSTGRES_USER:threadly}
@@ -28,9 +33,13 @@ app:
   jwt:
     secret: ${JWT_SECRET:ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
   internal-api-key: ${INTERNAL_API_KEY:threadly-internal-dev-key}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}
     requests-per-minute: ${RATE_LIMIT_RPM:180}
+  services:
+    notification-base-url: ${NOTIFICATION_SERVICE_URL:http://localhost:8088}
 
 logging:
   level:

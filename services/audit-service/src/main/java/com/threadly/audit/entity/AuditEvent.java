@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "audit_events")
@@ -14,8 +15,8 @@ import java.time.Instant;
 @Builder
 public class AuditEvent {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(name = "occurred_at", nullable = false)
     @Builder.Default
@@ -24,7 +25,6 @@ public class AuditEvent {
     @Column(name = "service_name", nullable = false, length = 80)
     private String serviceName;
 
-    /** CREATE | UPDATE | DELETE | LOGIN | OTHER */
     @Column(nullable = false, length = 20)
     private String action;
 
@@ -35,7 +35,7 @@ public class AuditEvent {
     private String resourceId;
 
     @Column(name = "actor_user_id")
-    private Long actorUserId;
+    private UUID actorUserId;
 
     @Column(name = "actor_username", length = 50)
     private String actorUsername;
@@ -45,6 +45,14 @@ public class AuditEvent {
 
     @Column(columnDefinition = "TEXT")
     private String metadata;
+
+    /** JSON snapshot before mutation (UPDATE). */
+    @Column(name = "before_data", columnDefinition = "TEXT")
+    private String beforeData;
+
+    /** JSON snapshot after mutation (CREATE/UPDATE). */
+    @Column(name = "after_data", columnDefinition = "TEXT")
+    private String afterData;
 
     @Column(name = "request_id", length = 64)
     private String requestId;

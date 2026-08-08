@@ -6,11 +6,15 @@ import { FormEvent, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { friendlyError } from '@/lib/api';
 import { useToast } from '@/lib/toast';
+import { SpinnerLabel } from '@/components/loaders';
+import { useTheme } from '@/lib/theme';
+import { MoonIcon, SunIcon } from '@/components/icons';
 
 export default function RegisterPage() {
   const { register } = useAuth();
   const router = useRouter();
   const { success, error } = useToast();
+  const { theme, toggleTheme } = useTheme();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,26 +35,44 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="panel" style={{ maxWidth: 460, margin: '2rem auto' }}>
-      <h1 style={{ fontFamily: 'var(--font-display)', marginTop: 0 }}>Join Threadly</h1>
-      <form className="form" onSubmit={onSubmit}>
-        <label>
-          Username
-          <input value={username} onChange={(e) => setUsername(e.target.value)} minLength={3} required />
-        </label>
-        <label>
-          Email
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </label>
-        <label>
-          Password
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} required />
-        </label>
-        <button className="btn" type="submit" disabled={busy}>{busy ? 'Creating…' : 'Sign up'}</button>
-      </form>
-      <p className="muted" style={{ marginBottom: 0 }}>
-        Already have an account? <Link href="/login">Log in</Link>
-      </p>
+    <div className="auth-page">
+      <button
+        type="button"
+        className="auth-theme-btn"
+        onClick={toggleTheme}
+        aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+      >
+        {theme === 'dark' ? <SunIcon size={18} /> : <MoonIcon size={18} />}
+      </button>
+      <div className="auth-card panel">
+        <Link href="/" className="auth-brand">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand-mark.svg" alt="" width={44} height={44} />
+          <span>Thread<span className="accent">ly</span></span>
+        </Link>
+        <h1>Join Threadly</h1>
+        <p className="muted auth-lead">Create an account to post, vote, and follow people.</p>
+        <form className="form" onSubmit={onSubmit}>
+          <label>
+            Username
+            <input value={username} onChange={(e) => setUsername(e.target.value)} minLength={3} required />
+          </label>
+          <label>
+            Email
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </label>
+          <label>
+            Password
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} required />
+          </label>
+          <button className="btn" type="submit" disabled={busy}>
+            {busy ? <SpinnerLabel label="Creating…" /> : 'Sign up'}
+          </button>
+        </form>
+        <p className="muted" style={{ marginBottom: 0 }}>
+          Already have an account? <Link href="/login">Log in</Link>
+        </p>
+      </div>
     </div>
   );
 }

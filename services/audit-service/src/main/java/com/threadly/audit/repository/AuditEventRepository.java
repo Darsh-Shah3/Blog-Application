@@ -11,7 +11,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.Instant;
 import java.util.List;
 
-public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
+public interface AuditEventRepository extends JpaRepository<AuditEvent, java.util.UUID> {
 
     @Query(AuditQueries.EVENT_SEARCH)
     Page<AuditEvent> search(
@@ -19,7 +19,8 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
             @Param("action") String action,
             @Param("resourceType") String resourceType,
             @Param("actorUsername") String actorUsername,
-            @Param("actorUserId") Long actorUserId,
+            @Param("hasActorUserId") boolean hasActorUserId,
+            @Param("actorUserId") java.util.UUID actorUserId,
             @Param("q") String q,
             @Param("from") Instant from,
             @Param("to") Instant to,

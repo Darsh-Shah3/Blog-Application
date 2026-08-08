@@ -33,11 +33,11 @@ public class JjwtTokenProvider implements JwtTokenProvider {
     }
 
     @Override
-    public String generateToken(Long userId, String username, List<String> roles, List<String> permissions) {
+    public String generateToken(java.util.UUID userId, String username, List<String> roles, List<String> permissions) {
         Date now = new Date();
         Date exp = new Date(now.getTime() + expirationMs);
         return Jwts.builder()
-                .setSubject(String.valueOf(userId))
+                .setSubject(userId.toString())
                 .setIssuedAt(now)
                 .setExpiration(exp)
                 .addClaims(Map.of(

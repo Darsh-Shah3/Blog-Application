@@ -2,8 +2,10 @@ package com.threadly.audit.controller;
 
 import com.threadly.audit.dto.AuditEventResponse;
 import com.threadly.audit.dto.CreateAuditEventRequest;
+import com.threadly.audit.dto.OpsMetricsResponse;
 import com.threadly.audit.dto.PlatformReportResponse;
 import com.threadly.audit.service.AuditService;
+import com.threadly.audit.service.OpsMetricsService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -22,6 +24,7 @@ import java.time.Instant;
 public class AuditController {
 
     private final AuditService auditService;
+    private final OpsMetricsService opsMetricsService;
 
     /** Internal: domain services publish create/update/delete events here. */
     @PostMapping("/api/v1/internal/audit/events")
@@ -38,7 +41,7 @@ public class AuditController {
             @RequestParam(required = false) String action,
             @RequestParam(required = false) String resourceType,
             @RequestParam(required = false) String actorUsername,
-            @RequestParam(required = false) Long actorUserId,
+            @RequestParam(required = false) java.util.UUID actorUserId,
             @RequestParam(required = false) String q,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
@@ -59,5 +62,16 @@ public class AuditController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<PlatformReportResponse> activity() {
         return ResponseEntity.ok(auditService.platformReport());
+    }
+
+    /**
+     * Live ops metrics for the in-app admin Analytics page.
+     * Sourced from Prometheus (same data Grafana uses) so admin graphs stay inside Threadly.
+     */
+    @GetMapping("/api/v1/reports/ops-metrics")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<OpsMetricsResponse> opsMetrics(
+            @RequestParam(defaultValue = "6") int hours) {
+        return ResponseEntity.ok(opsMetricsService.snapshot(hours));
     }
 }

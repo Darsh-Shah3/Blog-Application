@@ -27,6 +27,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -51,7 +52,7 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     @Transactional
-    public UserResponse assignRoles(Long userId, AssignRolesRequest request, Long actorId, String actorUsername) {
+    public UserResponse assignRoles(UUID userId, AssignRolesRequest request, UUID actorId, String actorUsername) {
         User user = findActiveUser(userId);
 
         Set<String> wanted = request.getRoles().stream()
@@ -85,8 +86,7 @@ public class AdminServiceImpl implements AdminService {
                     .orElseThrow(() -> new ApiException("Role missing in database: " + name, 500));
             roles.add(role);
         }
-        user.getRoles().clear();
-        user.getRoles().addAll(roles);
+        user.replaceRoles(roles);
         user.setUpdatedBy(AuditActors.resolve(actorUsername, actorId));
         user = userRepository.save(user);
         log.info("Roles updated userId={} actorId={} actor={} roles={}", userId, actorId, user.getUpdatedBy(), wanted);
@@ -95,7 +95,7 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     @Transactional
-    public void softDeleteUser(Long userId, Long actorId, String actorUsername) {
+    public void softDeleteUser(UUID userId, UUID actorId, String actorUsername) {
         User user = findActiveUser(userId);
         if (userId.equals(actorId)) {
             throw new ApiException("Use account delete for yourself", HttpStatus.BAD_REQUEST.value());
@@ -123,7 +123,7 @@ public class AdminServiceImpl implements AdminService {
                 .toList();
     }
 
-    private User findActiveUser(Long userId) {
+    private User findActiveUser(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiException("User not found", HttpStatus.NOT_FOUND.value()));
         if (user.isDeleted()) {

@@ -4,13 +4,16 @@ import './globals.css';
 import { AuthProvider } from '@/lib/auth';
 import { ToastProvider } from '@/lib/toast';
 import { ThemeProvider } from '@/lib/theme';
-import { SiteHeader } from '@/components/SiteHeader';
-import { SiteFooter } from '@/components/SiteFooter';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { SplashScreen } from '@/components/SplashScreen';
+import { AppChrome } from '@/components/AppChrome';
 
 export const metadata: Metadata = {
   title: 'Threadly — communities, posts, and follows',
-  description: 'Threadly microservices blog platform',
+  description: 'Threadly microservices blog platform by Darsh Shah',
+  icons: {
+    icon: '/brand-mark.svg',
+    apple: '/brand-mark.svg',
+  },
 };
 
 /** Runs before paint so the saved theme applies without a flash. */
@@ -39,13 +42,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <ToastProvider>
             <AuthProvider>
-              <div className="app-shell">
-                <SiteHeader />
-                <main className="main">
-                  <ErrorBoundary>{children}</ErrorBoundary>
-                </main>
-                <SiteFooter />
-              </div>
+              <SplashScreen />
+              <AppChrome>{children}</AppChrome>
             </AuthProvider>
           </ToastProvider>
         </ThemeProvider>

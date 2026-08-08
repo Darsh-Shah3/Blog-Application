@@ -21,6 +21,7 @@ spring:
               - OPTIONS
             allowedHeaders: "*"
             allowCredentials: true
+      # When deploying, set CORS via env-backed config or add your frontend origin here.
       default-filters:
         - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
       routes:
@@ -28,6 +29,11 @@ spring:
           uri: ${AUTH_SERVICE_URL:http://localhost:8081}
           predicates:
             - Path=/api/v1/auth/**,/api/v1/profiles/**,/api/v1/admin/**,/api/v1/roles/**
+        - id: community-ws
+          uri: ${COMMUNITY_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/ws/**
+          # WebSocket Upgrade is handled automatically by Spring Cloud Gateway
         - id: community-service
           uri: ${COMMUNITY_SERVICE_URL:http://localhost:8082}
           predicates:

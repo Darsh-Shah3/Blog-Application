@@ -4,17 +4,20 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.Instant;
+import java.util.Map;
+import java.util.UUID;
 
 @Data
 @Builder
 public class MediaResponse {
-    private Long id;
+    private UUID id;
     private String originalName;
     private String contentType;
-    /** IMAGE, VIDEO, AUDIO, DOCUMENT, ARCHIVE, OTHER */
     private String kind;
     private Long sizeBytes;
-    private Long uploaderId;
+    private UUID uploaderId;
+    private String uploaderUsername;
+    private Map<String, Object> uploader;
     private String url;
     private Instant createdAt;
     private String createdBy;

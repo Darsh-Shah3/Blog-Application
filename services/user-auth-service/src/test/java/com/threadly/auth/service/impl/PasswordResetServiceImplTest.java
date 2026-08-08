@@ -7,10 +7,10 @@ import com.threadly.auth.dto.ResetPasswordRequest;
 import com.threadly.auth.entity.PasswordResetToken;
 import com.threadly.auth.entity.User;
 import com.threadly.auth.exception.ApiException;
+import com.threadly.auth.repository.PasswordResetRateLimitRepository;
 import com.threadly.auth.repository.PasswordResetTokenRepository;
 import com.threadly.auth.repository.UserRepository;
 import com.threadly.auth.service.MailService;
-import com.threadly.auth.service.PasswordResetService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,6 +22,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -32,11 +33,14 @@ class PasswordResetServiceImplTest {
 
     @Mock UserRepository userRepository;
     @Mock PasswordResetTokenRepository tokenRepository;
+    @Mock PasswordResetRateLimitRepository rateLimitRepository;
     @Mock PasswordEncoder passwordEncoder;
     @Mock MailService mailService;
     @Mock MailAppProperties mailProps;
 
     @InjectMocks PasswordResetServiceImpl service;
+
+    private final UUID userId = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
     @BeforeEach
     void mailDefaults() {
@@ -59,15 +63,18 @@ class PasswordResetServiceImplTest {
 
     @Test
     void forgotPasswordKnownEmailCreatesTokenAndMails() {
-        User user = User.builder().id(5L).email("a@example.com").username("a").passwordHash("x").displayName("A").build();
+        User user = User.builder().id(userId).email("a@example.com").username("a")
+                .passwordHash("x").displayName("A").build();
         ForgotPasswordRequest req = new ForgotPasswordRequest();
         req.setEmail("a@example.com");
         when(userRepository.findActiveByEmail("a@example.com")).thenReturn(Optional.of(user));
+        when(rateLimitRepository.findById(userId)).thenReturn(Optional.empty());
+        when(rateLimitRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.forgotPassword(req);
 
-        verify(tokenRepository).deleteUnusedForUser(5L);
+        verify(tokenRepository).deleteUnusedForUser(userId);
         ArgumentCaptor<String> url = ArgumentCaptor.forClass(String.class);
         verify(mailService).sendPasswordReset(eq("a@example.com"), url.capture());
         assertTrue(url.getValue().contains("/reset-password?token="));
@@ -78,7 +85,7 @@ class PasswordResetServiceImplTest {
         ResetPasswordRequest req = new ResetPasswordRequest();
         req.setToken("bad");
         req.setNewPassword("newpass1");
-        when(tokenRepository.findByTokenHashAndUsedAtIsNull(anyString())).thenReturn(Optional.empty());
+        when(tokenRepository.findByTokenHashAndUsedFalse(anyString())).thenReturn(Optional.empty());
 
         ApiException ex = assertThrows(ApiException.class, () -> service.resetPassword(req));
         assertEquals(400, ex.getStatus());
@@ -86,27 +93,31 @@ class PasswordResetServiceImplTest {
 
     @Test
     void resetPasswordUpdatesHashWhenTokenValid() {
+        UUID uid = UUID.fromString("22222222-2222-2222-2222-222222222222");
         ResetPasswordRequest req = new ResetPasswordRequest();
         req.setToken("raw-token");
         req.setNewPassword("newpass1");
 
         PasswordResetToken token = PasswordResetToken.builder()
-                .id(1L)
-                .userId(9L)
+                .id(UUID.randomUUID())
+                .userId(uid)
+                .username("u")
                 .tokenHash("x")
                 .expiresAt(Instant.now().plusSeconds(600))
+                .used(false)
                 .build();
-        User user = User.builder().id(9L).email("u@x.com").username("u")
+        User user = User.builder().id(uid).email("u@x.com").username("u")
                 .passwordHash("old").displayName("U").build();
 
-        when(tokenRepository.findByTokenHashAndUsedAtIsNull(anyString())).thenReturn(Optional.of(token));
-        when(userRepository.findById(9L)).thenReturn(Optional.of(user));
+        when(tokenRepository.findByTokenHashAndUsedFalse(anyString())).thenReturn(Optional.of(token));
+        when(userRepository.findById(uid)).thenReturn(Optional.of(user));
         when(passwordEncoder.encode("newpass1")).thenReturn("hashed-new");
 
         MessageResponse res = service.resetPassword(req);
 
         assertTrue(res.getMessage().toLowerCase().contains("password updated"));
         assertEquals("hashed-new", user.getPasswordHash());
+        assertTrue(token.isUsed());
         assertNotNull(token.getUsedAt());
         verify(userRepository).save(user);
     }

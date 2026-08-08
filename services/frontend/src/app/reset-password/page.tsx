@@ -5,11 +5,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { FormEvent, Suspense, useState } from 'react';
 import { api, friendlyError } from '@/lib/api';
 import { useToast } from '@/lib/toast';
+import { FormSkeleton, SpinnerLabel } from '@/components/loaders';
+import { useTheme } from '@/lib/theme';
+import { MoonIcon, SunIcon } from '@/components/icons';
 
 function ResetForm() {
   const search = useSearchParams();
   const router = useRouter();
   const { success, error } = useToast();
+  const { theme, toggleTheme } = useTheme();
   const tokenFromUrl = search.get('token') || '';
   const [token, setToken] = useState(tokenFromUrl);
   const [password, setPassword] = useState('');
@@ -46,37 +50,53 @@ function ResetForm() {
   };
 
   return (
-    <div className="panel" style={{ maxWidth: 420, margin: '2rem auto' }}>
-      <h1 style={{ fontFamily: 'var(--font-display)', marginTop: 0 }}>Set new password</h1>
-      <form className="form" onSubmit={onSubmit}>
-        {!tokenFromUrl && (
+    <div className="auth-page">
+      <button
+        type="button"
+        className="auth-theme-btn"
+        onClick={toggleTheme}
+        aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+      >
+        {theme === 'dark' ? <SunIcon size={18} /> : <MoonIcon size={18} />}
+      </button>
+      <div className="auth-card panel">
+        <Link href="/" className="auth-brand">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand-mark.svg" alt="" width={44} height={44} />
+          <span>Thread<span className="accent">ly</span></span>
+        </Link>
+        <h1>Set new password</h1>
+        <p className="muted auth-lead">Choose a strong password for your account.</p>
+        <form className="form" onSubmit={onSubmit}>
+          {!tokenFromUrl && (
+            <label>
+              Reset token
+              <input value={token} onChange={(e) => setToken(e.target.value)} required />
+            </label>
+          )}
           <label>
-            Reset token
-            <input value={token} onChange={(e) => setToken(e.target.value)} required />
+            New password
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} required />
           </label>
-        )}
-        <label>
-          New password
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} required />
-        </label>
-        <label>
-          Confirm password
-          <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} minLength={6} required />
-        </label>
-        <button className="btn" type="submit" disabled={busy}>
-          {busy ? 'Saving…' : 'Update password'}
-        </button>
-      </form>
-      <p className="muted" style={{ marginBottom: 0 }}>
-        <Link href="/forgot-password">Request a new link</Link>
-      </p>
+          <label>
+            Confirm password
+            <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} minLength={6} required />
+          </label>
+          <button className="btn" type="submit" disabled={busy}>
+            {busy ? <SpinnerLabel label="Saving…" /> : 'Update password'}
+          </button>
+        </form>
+        <p className="muted" style={{ marginBottom: 0 }}>
+          <Link href="/forgot-password">Request a new link</Link>
+        </p>
+      </div>
     </div>
   );
 }
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<p className="muted" style={{ marginTop: '1.5rem' }}>Loading…</p>}>
+    <Suspense fallback={<div className="auth-page"><FormSkeleton lines={3} /></div>}>
       <ResetForm />
     </Suspense>
   );

@@ -6,9 +6,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * Public user profiles (username-first identity for Reddit-style URLs).
- */
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/v1/profiles")
 @RequiredArgsConstructor
@@ -22,7 +21,7 @@ public class ProfileController {
     }
 
     @GetMapping("/by-id/{id}")
-    public ResponseEntity<UserResponse> byId(@PathVariable Long id) {
+    public ResponseEntity<UserResponse> byId(@PathVariable UUID id) {
         return ResponseEntity.ok(authService.getById(id));
     }
 }

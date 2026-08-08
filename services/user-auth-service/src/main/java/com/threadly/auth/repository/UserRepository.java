@@ -9,8 +9,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
+import java.util.UUID;
 
-public interface UserRepository extends JpaRepository<User, Long> {
+public interface UserRepository extends JpaRepository<User, UUID> {
 
     @Query(AuthQueries.USER_FIND_ACTIVE_BY_EMAIL)
     Optional<User> findActiveByEmail(@Param("email") String email);

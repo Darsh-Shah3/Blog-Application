@@ -24,7 +24,7 @@ public class WebClientUserAdapter implements UserPort {
     }
 
     @Override
-    public Optional<UserSummary> findById(Long userId) {
+    public Optional<UserSummary> findById(java.util.UUID userId) {
         try {
             UserDto dto = webClient.get()
                     .uri("/api/v1/internal/users/{id}", userId)
@@ -43,7 +43,7 @@ public class WebClientUserAdapter implements UserPort {
     }
 
     private static class UserDto {
-        public Long id;
+        public java.util.UUID id;
         public String username;
     }
 }

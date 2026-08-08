@@ -1,10 +1,14 @@
 package com.threadly.post.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.threadly.post.dto.CreatePostRequest;
 import com.threadly.post.dto.PostResponse;
 import com.threadly.post.entity.Post;
 import com.threadly.post.exception.ApiException;
 import com.threadly.post.mapper.PostMapper;
+import com.threadly.post.model.MediaRef;
+import com.threadly.post.model.NamedRef;
+import com.threadly.post.model.UserRef;
 import com.threadly.post.port.AuditPort;
 import com.threadly.post.port.CommunityPort;
 import com.threadly.post.port.CommunitySummary;
@@ -15,6 +19,7 @@ import com.threadly.post.repository.PostRepository;
 import com.threadly.post.security.AccessControl;
 import com.threadly.post.service.PostService;
 import com.threadly.post.util.AuditActors;
+import com.threadly.post.util.PgUuidArray;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,16 +31,21 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
-/**
- * Post use-cases. Cross-service enrichment goes only through ports (not HTTP clients).
- */
 @Service
 @RequiredArgsConstructor
 public class PostServiceImpl implements PostService {
 
     private static final Logger log = LoggerFactory.getLogger(PostServiceImpl.class);
+    private static final int MAX_PAGE_SIZE = 50;
+    private static final int TRENDING_HOURS = 48;
 
     private final PostRepository postRepository;
     private final CommunityPort communityPort;
@@ -43,19 +53,26 @@ public class PostServiceImpl implements PostService {
     private final PostMapper postMapper;
     private final AuditPort auditPort;
     private final NotificationPort notificationPort;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional
-    public PostResponse create(Long authorId, String actorUsername, CreatePostRequest request) {
+    public PostResponse create(UUID authorId, String actorUsername, CreatePostRequest request) {
         CommunitySummary community = communityPort.findById(request.getCommunityId())
                 .orElseThrow(() -> new ApiException("Community not found", HttpStatus.BAD_REQUEST.value()));
 
         Post.PostType type = request.getPostType() == null ? Post.PostType.TEXT : request.getPostType();
-        if (type == Post.PostType.LINK && (request.getLinkUrl() == null || request.getLinkUrl().isBlank())) {
-            throw new ApiException("linkUrl required for LINK posts", HttpStatus.BAD_REQUEST.value());
+        List<String> links = request.getLinkUrls() == null ? List.of() : request.getLinkUrls().stream()
+                .filter(u -> u != null && !u.isBlank())
+                .map(String::trim)
+                .collect(Collectors.toCollection(ArrayList::new));
+        List<MediaRef> media = request.getMedia() == null ? List.of() : new ArrayList<>(request.getMedia());
+
+        if (type == Post.PostType.LINK && links.isEmpty()) {
+            throw new ApiException("At least one linkUrl is required for LINK posts", HttpStatus.BAD_REQUEST.value());
         }
-        if ((type == Post.PostType.IMAGE || type == Post.PostType.FILE) && request.getMediaId() == null) {
-            throw new ApiException("mediaId required for IMAGE/FILE posts — upload via /api/v1/media/uploads first",
+        if ((type == Post.PostType.IMAGE || type == Post.PostType.FILE) && media.isEmpty()) {
+            throw new ApiException("At least one media item is required for IMAGE/FILE posts",
                     HttpStatus.BAD_REQUEST.value());
         }
 
@@ -64,115 +81,251 @@ public class PostServiceImpl implements PostService {
                 ? author.username()
                 : AuditActors.resolve(actorUsername, authorId);
 
+        Instant when = Instant.now();
+        Post.Status status = Post.Status.PUBLISHED;
+        Instant scheduledAt = request.getScheduledAt();
+        if (scheduledAt != null && scheduledAt.isAfter(Instant.now().plusSeconds(30))) {
+            status = Post.Status.SCHEDULED;
+            when = scheduledAt;
+        } else {
+            scheduledAt = null;
+        }
+
         Post post = Post.builder()
-                .communityId(request.getCommunityId())
+                .communityId(community.id())
+                .community(NamedRef.builder().id(community.id()).name(community.name()).slug(community.slug()).build())
                 .authorId(authorId)
+                .author(UserRef.builder()
+                        .id(authorId)
+                        .username(by)
+                        .build())
                 .title(request.getTitle().trim())
                 .content(request.getContent())
                 .postType(type)
-                .linkUrl(request.getLinkUrl())
-                .mediaId(request.getMediaId())
+                .linkUrls(links)
+                .media(media)
                 .score(0L)
                 .commentCount(0L)
+                .status(status)
+                .scheduledAt(scheduledAt)
+                .createdAt(when)
+                .updatedAt(when)
                 .createdBy(by)
                 .updatedBy(by)
                 .build();
         post = postRepository.save(post);
-        log.info("Post created id={} type={} mediaId={} communityId={} authorId={} createdBy={}",
-                post.getId(), type, post.getMediaId(), post.getCommunityId(), authorId, by);
-        auditPort.record("CREATE", "POST", String.valueOf(post.getId()), authorId, by,
-                "Post created: " + post.getTitle());
-        notificationPort.notifyPostCreated(authorId, by, post.getId(), post.getTitle(), community.slug());
-        return postMapper.toResponse(post, community, author);
-    }
+        log.info("Post created id={} type={} status={} communityId={} authorId={}",
+                post.getId(), type, status, post.getCommunityId(), authorId);
 
-    @Override
-    @Transactional(readOnly = true)
-    public PostResponse get(Long id) {
-        return enrich(find(id));
-    }
+        String after = toJson(postMapper.toResponse(post));
+        auditPort.record("CREATE", "POST", post.getId().toString(), authorId, by,
+                "Post created: " + post.getTitle(), null, after);
 
-    @Override
-    @Transactional(readOnly = true)
-    public Page<PostResponse> feed(String sort, Long communityId, Long authorId, Long userId, String q, Pageable pageable) {
-        Pageable sorted = applySort(sort, pageable);
-        Page<Post> page;
-        if (q != null && !q.isBlank()) {
-            page = postRepository.searchByTitle(q.trim(), sorted);
-        } else if (communityId != null) {
-            page = postRepository.findByCommunityId(communityId, sorted);
-        } else if (authorId != null) {
-            page = postRepository.findByAuthorId(authorId, sorted);
-        } else if (userId != null) {
-            // Personalized home: only posts from communities the viewer joined.
-            List<Long> joined = communityPort.findJoinedCommunityIds(userId);
-            page = joined.isEmpty()
-                    ? postRepository.findAll(sorted)
-                    : postRepository.findByCommunityIdIn(joined, sorted);
-        } else {
-            page = postRepository.findAll(sorted);
+        if (status == Post.Status.PUBLISHED) {
+            String mediaUrl = media.stream().map(MediaRef::getUrl).filter(u -> u != null && !u.isBlank()).findFirst().orElse(null);
+            notificationPort.notifyPostCreated(authorId, by, post.getId(), post.getTitle(), community.slug(),
+                    request.getNotificationSummary(), mediaUrl);
         }
-        return page.map(this::enrich);
+        return postMapper.toResponse(post);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PostResponse get(UUID id) {
+        return postMapper.toResponse(find(id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<PostResponse> feed(String sort, UUID communityId, UUID authorId, UUID userId, String q, Pageable pageable) {
+        Pageable page = capped(pageable);
+        String mode = sort == null ? "for_you" : sort.toLowerCase(Locale.ROOT).trim();
+
+        if (q != null && !q.isBlank()) {
+            return mapPage(search(q.trim(), applySort(mode, page)));
+        }
+
+        return switch (mode) {
+            case "for_you", "foryou", "recommended" -> mapPage(forYou(userId, page));
+            case "trending" -> mapPage(trending(communityId, userId, page));
+            case "hot" -> mapPage(hotFeed(communityId, authorId, userId, page));
+            case "top" -> mapPage(plainFeed(communityId, authorId, userId,
+                    applySort("top", page)));
+            default -> mapPage(plainFeed(communityId, authorId, userId,
+                    applySort("new", page)));
+        };
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PostResponse> related(UUID postId, int limit) {
+        Post post = find(postId);
+        int size = Math.min(Math.max(limit, 1), 20);
+        String terms = titleTerms(post.getTitle());
+        return postRepository.findRelated(post.getCommunityId(), postId, terms, size).stream()
+                .map(postMapper::toResponse)
+                .toList();
     }
 
     @Override
     @Transactional
-    public void delete(Long id, Long userId) {
+    public void delete(UUID id, UUID userId) {
         Post post = find(id);
         boolean owner = post.getAuthorId().equals(userId);
         if (!owner && !AccessControl.canModerateContent()) {
             throw new ApiException("Not allowed to delete this post", HttpStatus.FORBIDDEN.value());
         }
+        String before = toJson(postMapper.toResponse(post));
         postRepository.delete(post);
-        auditPort.record("DELETE", "POST", String.valueOf(id), userId, null,
-                "Post deleted id=" + id);
+        auditPort.record("DELETE", "POST", id.toString(), userId, null,
+                "Post deleted id=" + id, before, null);
         log.info("Post deleted id={} by userId={} moderated={}", id, userId, !owner);
     }
 
     @Override
     @Transactional
-    public PostResponse adjustScore(Long id, long delta) {
+    public PostResponse adjustScore(UUID id, long delta) {
         Post post = find(id);
+        String before = toJson(postMapper.toResponse(post));
         post.setScore(post.getScore() + delta);
         post.setUpdatedBy("system");
-        return enrich(postRepository.save(post));
+        post = postRepository.save(post);
+        auditPort.record("UPDATE", "POST", id.toString(), null, "system",
+                "Score delta " + delta, before, toJson(postMapper.toResponse(post)));
+        return postMapper.toResponse(post);
     }
 
     @Override
     @Transactional
-    public PostResponse adjustCommentCount(Long id, long delta) {
+    public PostResponse adjustCommentCount(UUID id, long delta) {
         Post post = find(id);
         post.setCommentCount(Math.max(0, post.getCommentCount() + delta));
         post.setUpdatedBy("system");
-        return enrich(postRepository.save(post));
+        return postMapper.toResponse(postRepository.save(post));
     }
 
-    private Post find(Long id) {
+    private Page<Post> search(String q, Pageable pageable) {
+        try {
+            Page<Post> fts = postRepository.searchByTitleFts(q, unsorted(pageable));
+            if (!fts.isEmpty() || q.length() < 2) {
+                return fts;
+            }
+        } catch (Exception e) {
+            log.warn("FTS search failed, falling back to LIKE: {}", e.getMessage());
+        }
+        return postRepository.searchByTitleLike(q, pageable);
+    }
+
+    private Page<Post> forYou(UUID userId, Pageable pageable) {
+        if (userId == null) {
+            return trending(null, null, pageable);
+        }
+        List<UUID> joined = communityPort.findJoinedCommunityIds(userId);
+        List<UUID> following = userPort.findFollowingIds(userId);
+        if (joined.isEmpty() && following.isEmpty()) {
+            return trending(null, userId, pageable);
+        }
+        return postRepository.findForYou(PgUuidArray.of(joined), PgUuidArray.of(following), unsorted(pageable));
+    }
+
+    private Page<Post> trending(UUID communityId, UUID userId, Pageable pageable) {
+        Instant since = Instant.now().minus(TRENDING_HOURS, ChronoUnit.HOURS);
+        Pageable p = unsorted(pageable);
+        if (communityId != null) {
+            return postRepository.findTrendingInCommunities(since, PgUuidArray.of(List.of(communityId)), p);
+        }
+        if (userId != null) {
+            List<UUID> joined = communityPort.findJoinedCommunityIds(userId);
+            if (!joined.isEmpty()) {
+                Page<Post> scoped = postRepository.findTrendingInCommunities(since, PgUuidArray.of(joined), p);
+                if (!scoped.isEmpty()) {
+                    return scoped;
+                }
+            }
+        }
+        return postRepository.findTrending(since, p);
+    }
+
+    private Page<Post> hotFeed(UUID communityId, UUID authorId, UUID userId, Pageable pageable) {
+        Pageable p = unsorted(pageable);
+        if (communityId != null) {
+            return postRepository.findByCommunityIdHot(communityId, p);
+        }
+        if (authorId != null) {
+            return postRepository.findByAuthorIdHot(authorId, p);
+        }
+        if (userId != null) {
+            List<UUID> joined = communityPort.findJoinedCommunityIds(userId);
+            if (!joined.isEmpty()) {
+                return postRepository.findByCommunityIdsHot(PgUuidArray.of(joined), p);
+            }
+        }
+        return postRepository.findAllByHotRank(p);
+    }
+
+    private Page<Post> plainFeed(UUID communityId, UUID authorId, UUID userId, Pageable sorted) {
+        if (communityId != null) {
+            return postRepository.findByCommunityId(communityId, sorted);
+        }
+        if (authorId != null) {
+            return postRepository.findByAuthorId(authorId, sorted);
+        }
+        if (userId != null) {
+            List<UUID> joined = communityPort.findJoinedCommunityIds(userId);
+            if (!joined.isEmpty()) {
+                return postRepository.findByCommunityIdIn(joined, sorted);
+            }
+        }
+        return postRepository.findAllVisible(sorted);
+    }
+
+    private Page<PostResponse> mapPage(Page<Post> page) {
+        return page.map(postMapper::toResponse);
+    }
+
+    private Post find(UUID id) {
         return postRepository.findById(id)
                 .orElseThrow(() -> new ApiException("Post not found", HttpStatus.NOT_FOUND.value()));
     }
 
-    /**
-     * Maps UI sort keys (hot/new/top) to multi-column database ordering.
-     * "hot" ≈ score + engagement; true Reddit hot needs time-decay (future).
-     */
     private Pageable applySort(String sort, Pageable pageable) {
-        String s = sort == null ? "new" : sort.toLowerCase();
+        String s = sort == null ? "new" : sort.toLowerCase(Locale.ROOT);
         return switch (s) {
             case "top" -> PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                     Sort.by(Sort.Direction.DESC, "score").and(Sort.by(Sort.Direction.DESC, "createdAt")));
-            case "hot" -> PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
-                    Sort.by(Sort.Direction.DESC, "score")
-                            .and(Sort.by(Sort.Direction.DESC, "commentCount"))
-                            .and(Sort.by(Sort.Direction.DESC, "createdAt")));
+            case "hot", "trending", "for_you", "foryou", "recommended" -> unsorted(pageable);
             default -> PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                     Sort.by(Sort.Direction.DESC, "createdAt"));
         };
     }
 
-    private PostResponse enrich(Post post) {
-        CommunitySummary community = communityPort.findById(post.getCommunityId()).orElse(null);
-        UserSummary author = userPort.findById(post.getAuthorId()).orElse(null);
-        return postMapper.toResponse(post, community, author);
+    private static Pageable capped(Pageable pageable) {
+        int size = Math.min(pageable.getPageSize(), MAX_PAGE_SIZE);
+        int number = Math.max(pageable.getPageNumber(), 0);
+        return PageRequest.of(number, size, pageable.getSort());
+    }
+
+    private static Pageable unsorted(Pageable pageable) {
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+    }
+
+    private static String titleTerms(String title) {
+        if (title == null || title.isBlank()) {
+            return "post";
+        }
+        String cleaned = title.replaceAll("[^\\p{L}\\p{N}\\s]", " ").trim();
+        if (cleaned.isBlank()) {
+            return "post";
+        }
+        // plainto_tsquery handles multi-word phrases; keep a short signal string
+        return cleaned.length() > 120 ? cleaned.substring(0, 120) : cleaned;
+    }
+
+    private String toJson(Object o) {
+        try {
+            return objectMapper.writeValueAsString(o);
+        } catch (Exception e) {
+            return String.valueOf(o);
+        }
     }
 }

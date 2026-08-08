@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: comment-service
+  data:
+    web:
+      pageable:
+        max-page-size: 50
+        default-page-size: 25
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:comment_db}
     username: ${POSTGRES_USER:threadly}

@@ -10,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/v1/votes")
 @RequiredArgsConstructor
@@ -19,7 +21,7 @@ public class VoteController {
 
     @PostMapping
     public ResponseEntity<VoteResponse> cast(
-            @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
             @RequestHeader(value = "X-Username", required = false) String username,
             @Valid @RequestBody CastVoteRequest request) {
         if (userId == null) {
@@ -28,12 +30,11 @@ public class VoteController {
         return ResponseEntity.ok(voteService.cast(userId, username, request));
     }
 
-    /** The caller's vote on a target, or value=0 when none. */
     @GetMapping("/current")
     public ResponseEntity<VoteResponse> currentVote(
-            @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
             @RequestParam Vote.TargetType targetType,
-            @RequestParam Long targetId) {
+            @RequestParam UUID targetId) {
         if (userId == null) {
             throw new ApiException("Authentication required", 401);
         }

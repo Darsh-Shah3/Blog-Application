@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
 import { PostCard } from '@/components/PostCard';
 import Link from 'next/link';
+import { ContentPlaceholder, ProfileSkeleton, SpinnerLabel } from '@/components/loaders';
 
 export default function ProfilePage() {
   const params = useParams<{ username: string }>();
@@ -51,7 +52,7 @@ export default function ProfilePage() {
         token
       );
       setFollow(st);
-      success(st.following ? `Following @${user.username}` : `Unfollowed @${user.username}`);
+      success(st.following ? `Following ${user.username}` : `Unfollowed ${user.username}`);
     } catch (e) {
       error(friendlyError(e));
     } finally {
@@ -60,7 +61,7 @@ export default function ProfilePage() {
   };
 
   if (loading && !user) {
-    return <p className="muted" style={{ marginTop: '1.5rem' }}>Loading profile…</p>;
+    return <ProfileSkeleton />;
   }
   if (!user) {
     return (
@@ -76,9 +77,9 @@ export default function ProfilePage() {
   return (
     <>
       <section className="hero">
-        <h1>u/{user.username}</h1>
+        <h1>{user.displayName || user.username}</h1>
         <p>
-          {user.displayName} · {user.karma} karma
+          {user.username} · {user.karma} karma
           {follow ? ` · ${follow.followerCount} followers · ${follow.followingCount} following` : ''}
           {user.bio ? ` — ${user.bio}` : ''}
         </p>
@@ -92,14 +93,16 @@ export default function ProfilePage() {
         {!isSelf && me && (
           <div className="toolbar" style={{ marginTop: '0.85rem' }}>
             <button type="button" className="btn" disabled={busy} onClick={toggleFollow}>
-              {busy ? '…' : follow?.following ? 'Unfollow' : 'Follow'}
+              {busy ? <SpinnerLabel label="Updating…" /> : follow?.following ? 'Unfollow' : 'Follow'}
             </button>
           </div>
         )}
       </section>
       <div className="stack">
         {posts.map((p) => <PostCard key={p.id} post={p} />)}
-        {posts.length === 0 && <div className="panel muted">No posts yet.</div>}
+        {posts.length === 0 && (
+          <ContentPlaceholder title="No posts yet" description="This user has not published anything." />
+        )}
       </div>
     </>
   );

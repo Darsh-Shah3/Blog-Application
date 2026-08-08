@@ -52,6 +52,16 @@ export function PenIcon(p: IconProps) {
   );
 }
 
+export function ImageIcon(p: IconProps) {
+  return (
+    <Icon {...p}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <circle cx="9" cy="10" r="1.5" />
+      <path d="m21 16-4.5-4.5L9 19" />
+    </Icon>
+  );
+}
+
 export function ShieldIcon(p: IconProps) {
   return (
     <Icon {...p}>

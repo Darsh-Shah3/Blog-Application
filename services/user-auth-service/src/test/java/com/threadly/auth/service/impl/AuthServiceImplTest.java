@@ -7,6 +7,7 @@ import com.threadly.auth.entity.User;
 import com.threadly.auth.exception.ApiException;
 import com.threadly.auth.mapper.UserMapper;
 import com.threadly.auth.repository.RoleRepository;
+import com.threadly.auth.repository.UserFollowRepository;
 import com.threadly.auth.repository.UserRepository;
 import com.threadly.auth.security.JwtTokenProvider;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,9 +19,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -31,6 +32,7 @@ class AuthServiceImplTest {
 
     @Mock UserRepository userRepository;
     @Mock RoleRepository roleRepository;
+    @Mock UserFollowRepository followRepository;
     @Mock PasswordEncoder passwordEncoder;
     @Mock JwtTokenProvider jwtTokenProvider;
     @Mock UserMapper userMapper;
@@ -38,10 +40,12 @@ class AuthServiceImplTest {
     @InjectMocks AuthServiceImpl authService;
 
     private Role userRole;
+    private final UUID roleId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    private final UUID userId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
     @BeforeEach
     void setUp() {
-        userRole = Role.builder().id(1L).name("ROLE_USER").build();
+        userRole = Role.builder().id(roleId).name("ROLE_USER").build();
     }
 
     @Test
@@ -58,14 +62,16 @@ class AuthServiceImplTest {
         when(passwordEncoder.encode("secret12")).thenReturn("hashed");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
             User u = inv.getArgument(0);
-            u.setId(10L);
+            u.setId(userId);
             return u;
         });
-        when(jwtTokenProvider.generateToken(eq(10L), eq("darsh"), anyList(), anyList()))
+        when(followRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(followRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(jwtTokenProvider.generateToken(eq(userId), eq("darsh"), anyList(), anyList()))
                 .thenReturn("jwt-token");
         when(userMapper.toResponse(any(User.class))).thenReturn(
                 com.threadly.auth.dto.UserResponse.builder()
-                        .id(10L).username("darsh").roles(Set.of("ROLE_USER")).build());
+                        .id(userId).username("darsh").roles(Set.of("ROLE_USER")).build());
 
         var res = authService.register(req);
 
@@ -92,13 +98,13 @@ class AuthServiceImplTest {
     @Test
     void loginRejectsBadPassword() {
         User user = User.builder()
-                .id(1L)
+                .id(userId)
                 .username("demo")
                 .email("demo@example.com")
                 .passwordHash("hash")
                 .displayName("Demo")
                 .build();
-        user.getRoles().add(userRole);
+        user.addRole(userRole);
         LoginRequest req = new LoginRequest();
         req.setEmailOrUsername("demo");
         req.setPassword("wrong");
@@ -109,6 +115,6 @@ class AuthServiceImplTest {
 
         ApiException ex = assertThrows(ApiException.class, () -> authService.login(req));
         assertEquals(401, ex.getStatus());
-        verify(jwtTokenProvider, never()).generateToken(anyLong(), anyString(), anyList(), anyList());
+        verify(jwtTokenProvider, never()).generateToken(any(), anyString(), anyList(), anyList());
     }
 }

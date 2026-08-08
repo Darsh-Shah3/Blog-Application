@@ -2,7 +2,7 @@
   "annotations": { "list": [] },
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
+  "graphTooltip": 1,
   "id": null,
   "links": [],
   "panels": [
@@ -13,7 +13,7 @@
       "id": 1,
       "targets": [
         {
-          "expr": "sum(rate(http_server_requests_seconds_count[1m])) by (application)",
+          "expr": "sum(rate(http_server_requests_seconds_count{uri!~\"/actuator.*\"}[1m])) by (application)",
           "legendFormat": "{{application}}",
           "refId": "A"
         }
@@ -28,7 +28,7 @@
       "id": 2,
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, application))",
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{uri!~\"/actuator.*\"}[5m])) by (le, application))",
           "legendFormat": "{{application}} p95",
           "refId": "A"
         }
@@ -43,7 +43,7 @@
       "id": 3,
       "targets": [
         {
-          "expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[1m])) by (application)",
+          "expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\",uri!~\"/actuator.*\"}[1m])) by (application)",
           "legendFormat": "{{application}}",
           "refId": "A"
         }
@@ -58,13 +58,62 @@
       "id": 4,
       "targets": [
         {
-          "expr": "jvm_memory_used_bytes{area=\"heap\"}",
+          "expr": "sum(jvm_memory_used_bytes{area=\"heap\"}) by (application)",
           "legendFormat": "{{application}}",
           "refId": "A"
         }
       ],
       "title": "JVM Heap Used",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{uri=~\"/api/v1/posts.*\",application=\"post-service\"}[5m])) by (le, uri))",
+          "legendFormat": "{{uri}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Feed API p95 (post-service)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 6,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{uri=~\"/api/v1/comments.*\",application=\"comment-service\"}[5m])) by (le, uri))",
+          "legendFormat": "{{uri}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Comments API p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": { "mappings": [], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }, "unit": "none" },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 24 },
+      "id": 7,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "auto", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [
+        {
+          "expr": "up",
+          "legendFormat": "{{job}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Scrape target up (1 = healthy)",
+      "type": "stat"
     }
   ],
   "schemaVersion": 39,
@@ -73,5 +122,5 @@
   "time": { "from": "now-15m", "to": "now" },
   "title": "Threadly Microservices Overview",
   "uid": "threadly-overview",
-  "version": 1
+  "version": 2
 }

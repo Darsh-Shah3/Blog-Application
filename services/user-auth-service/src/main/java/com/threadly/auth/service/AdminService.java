@@ -7,14 +7,15 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.UUID;
 
 public interface AdminService {
 
     Page<UserResponse> listUsers(String q, Pageable pageable);
 
-    UserResponse assignRoles(Long userId, AssignRolesRequest request, Long actorId, String actorUsername);
+    UserResponse assignRoles(UUID userId, AssignRolesRequest request, UUID actorId, String actorUsername);
 
-    void softDeleteUser(Long userId, Long actorId, String actorUsername);
+    void softDeleteUser(UUID userId, UUID actorId, String actorUsername);
 
     List<RoleResponse> listRoles();
 }

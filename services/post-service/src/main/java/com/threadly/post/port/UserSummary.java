@@ -1,4 +1,6 @@
 package com.threadly.post.port;
 
-public record UserSummary(Long id, String username, String displayName) {
+import java.util.UUID;
+
+public record UserSummary(UUID id, String username, String displayName) {
 }

@@ -11,6 +11,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Component
 public class WebClientAuditAdapter implements AuditPort {
@@ -26,7 +27,8 @@ public class WebClientAuditAdapter implements AuditPort {
 
     @Override
     public void record(String action, String resourceType, String resourceId,
-                       Long actorUserId, String actorUsername, String summary) {
+                       UUID actorUserId, String actorUsername, String summary,
+                       String beforeData, String afterData) {
         try {
             Map<String, Object> body = new HashMap<>();
             body.put("serviceName", "post-service");
@@ -36,6 +38,8 @@ public class WebClientAuditAdapter implements AuditPort {
             body.put("actorUserId", actorUserId);
             body.put("actorUsername", actorUsername);
             body.put("summary", summary);
+            body.put("beforeData", beforeData);
+            body.put("afterData", afterData);
             body.put("requestId", MDC.get("requestId"));
             webClient.post()
                     .uri("/api/v1/internal/audit/events")

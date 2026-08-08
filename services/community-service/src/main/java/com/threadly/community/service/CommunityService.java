@@ -6,25 +6,29 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.UUID;
 
-/** Community use-cases; keep HTTP layer unaware of JPA entities. */
 public interface CommunityService {
 
-    CommunityResponse create(Long userId, String actorUsername, CreateCommunityRequest request);
+    CommunityResponse create(UUID userId, String actorUsername, CreateCommunityRequest request);
 
-    CommunityResponse getBySlug(String slug, Long viewerId);
+    CommunityResponse getBySlug(String slug, UUID viewerId);
 
-    CommunityResponse getById(Long id, Long viewerId);
+    CommunityResponse getById(UUID id, UUID viewerId);
 
-    Page<CommunityResponse> list(String q, Long viewerId, Pageable pageable);
+    Page<CommunityResponse> list(String q, UUID viewerId, Pageable pageable);
 
-    CommunityResponse join(Long communityId, Long userId);
+    Page<CommunityResponse> discover(UUID viewerId, Pageable pageable);
 
-    CommunityResponse leave(Long communityId, Long userId);
+    CommunityResponse join(UUID communityId, UUID userId, String username);
 
-    List<Long> joinedCommunityIds(Long userId);
+    CommunityResponse leave(UUID communityId, UUID userId);
 
-    List<Long> memberIds(Long communityId);
+    List<UUID> joinedCommunityIds(UUID userId);
 
-    void delete(Long communityId, Long userId);
+    Page<UUID> joinedCommunityIds(UUID userId, Pageable pageable);
+
+    Page<UUID> memberIds(UUID communityId, Pageable pageable);
+
+    void delete(UUID communityId, UUID userId);
 }

@@ -5,13 +5,15 @@ import com.threadly.media.entity.MediaFile;
 import org.springframework.core.io.Resource;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.UUID;
+
 public interface MediaService {
 
-    MediaResponse store(Long uploaderId, String actorUsername, MultipartFile file);
+    MediaResponse store(UUID uploaderId, String actorUsername, MultipartFile file);
 
-    MediaResponse meta(Long id);
+    MediaResponse meta(UUID id);
 
-    Resource loadAsResource(Long id);
+    Resource loadAsResource(UUID id);
 
-    MediaFile find(Long id);
+    MediaFile find(UUID id);
 }

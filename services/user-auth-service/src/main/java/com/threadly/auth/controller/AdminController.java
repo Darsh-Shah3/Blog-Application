@@ -15,10 +15,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
-/**
- * Platform administration — requires ROLE_ADMIN.
- */
 @RestController
 @RequestMapping("/api/v1/admin")
 @RequiredArgsConstructor
@@ -38,9 +36,9 @@ public class AdminController {
     public ResponseEntity<UserResponse> assignRoles(
             Authentication authentication,
             @RequestHeader(value = "X-Username", required = false) String username,
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody AssignRolesRequest request) {
-        Long actorId = Long.parseLong(authentication.getName());
+        UUID actorId = UUID.fromString(authentication.getName());
         return ResponseEntity.ok(adminService.assignRoles(id, request, actorId, username));
     }
 
@@ -48,8 +46,8 @@ public class AdminController {
     public ResponseEntity<Void> softDeleteUser(
             Authentication authentication,
             @RequestHeader(value = "X-Username", required = false) String username,
-            @PathVariable Long id) {
-        Long actorId = Long.parseLong(authentication.getName());
+            @PathVariable UUID id) {
+        UUID actorId = UUID.fromString(authentication.getName());
         adminService.softDeleteUser(id, actorId, username);
         return ResponseEntity.noContent().build();
     }

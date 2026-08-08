@@ -2,8 +2,12 @@ package com.threadly.comment.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.Map;
+import java.util.UUID;
 
 @Entity
 @Table(name = "comments")
@@ -14,17 +18,32 @@ import java.time.Instant;
 @Builder
 public class Comment {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    /** Snapshot: id + title of the post. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(nullable = false, columnDefinition = "jsonb")
+    private Map<String, Object> post;
 
     @Column(name = "post_id", nullable = false)
-    private Long postId;
+    private UUID postId;
+
+    /** Snapshot: id + username of author. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(nullable = false, columnDefinition = "jsonb")
+    private Map<String, Object> author;
 
     @Column(name = "author_id", nullable = false)
-    private Long authorId;
+    private UUID authorId;
+
+    /** Snapshot parent comment when reply; null for top-level. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private Map<String, Object> parent;
 
     @Column(name = "parent_id")
-    private Long parentId;
+    private UUID parentId;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;

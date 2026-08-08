@@ -28,7 +28,7 @@ public class AuthClient {
         this.internalApiKey = internalApiKey;
     }
 
-    public List<FollowerContact> listFollowers(Long userId) {
+    public List<FollowerContact> listFollowers(java.util.UUID userId) {
         try {
             return webClient.get()
                     .uri("/api/v1/internal/users/{id}/followers", userId)
@@ -42,5 +42,5 @@ public class AuthClient {
         }
     }
 
-    public record FollowerContact(Long id, String username, String email) {}
+    public record FollowerContact(java.util.UUID id, String username, String email) {}
 }

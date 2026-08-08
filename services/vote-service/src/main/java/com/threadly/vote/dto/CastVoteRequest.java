@@ -6,12 +6,16 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.UUID;
+
 @Data
 public class CastVoteRequest {
     @NotNull
     private Vote.TargetType targetType;
     @NotNull
-    private Long targetId;
+    private UUID targetId;
+    /** Optional display name (post title or comment preview). */
+    private String targetName;
     @NotNull
     @Min(-1)
     @Max(1)

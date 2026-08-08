@@ -13,6 +13,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/v1/media")
 @RequiredArgsConstructor
@@ -22,7 +24,7 @@ public class MediaController {
 
     @PostMapping(path = "/uploads", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<MediaResponse> upload(
-            @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
             @RequestHeader(value = "X-Username", required = false) String username,
             @RequestPart("file") MultipartFile file) {
         if (userId == null) {
@@ -32,19 +34,17 @@ public class MediaController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<MediaResponse> meta(@PathVariable Long id) {
+    public ResponseEntity<MediaResponse> meta(@PathVariable UUID id) {
         return ResponseEntity.ok(mediaService.meta(id));
     }
 
     @GetMapping("/{id}/content")
-    public ResponseEntity<Resource> content(@PathVariable Long id) {
+    public ResponseEntity<Resource> content(@PathVariable UUID id) {
         MediaFile media = mediaService.find(id);
         Resource resource = mediaService.loadAsResource(id);
         String kind = media.getMediaKind() == null ? "OTHER" : media.getMediaKind();
-        // Images/videos preview inline; zip and docs download as attachment.
         String disposition = (kind.equals("IMAGE") || kind.equals("VIDEO") || kind.equals("AUDIO"))
-                ? "inline"
-                : "attachment";
+                ? "inline" : "attachment";
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         disposition + "; filename=\"" + media.getOriginalName().replace("\"", "") + "\"")

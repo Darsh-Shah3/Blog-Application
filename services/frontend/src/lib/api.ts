@@ -1,5 +1,5 @@
 export type User = {
-  id: number;
+  id: string;
   username: string;
   email: string;
   displayName: string;
@@ -23,38 +23,49 @@ export type AuthResponse = {
 };
 
 export type Community = {
-  id: number;
+  id: string;
   name: string;
   slug: string;
   description?: string | null;
-  creatorId: number;
+  creatorId: string;
+  creatorUsername?: string;
   memberCount: number;
   joined?: boolean;
 };
 
+export type MediaRef = {
+  id: string;
+  originalName?: string;
+  contentType?: string;
+  mediaKind?: string;
+  url?: string;
+};
+
 export type Post = {
-  id: number;
-  communityId: number;
+  id: string;
+  communityId: string;
   communityName?: string;
   communitySlug?: string;
-  authorId: number;
+  authorId: string;
   authorUsername?: string;
   title: string;
   content?: string | null;
   postType: 'TEXT' | 'LINK' | 'IMAGE' | 'FILE';
-  linkUrl?: string | null;
-  mediaId?: number | null;
+  linkUrls?: string[];
+  media?: MediaRef[];
   score: number;
   commentCount: number;
+  status?: 'PUBLISHED' | 'SCHEDULED';
+  scheduledAt?: string | null;
   createdAt: string;
 };
 
 export type CommentNode = {
-  id: number;
-  postId: number;
-  authorId: number;
+  id: string;
+  postId: string;
+  authorId: string;
   authorUsername?: string;
-  parentId?: number | null;
+  parentId?: string | null;
   content: string;
   score: number;
   createdAt: string;
@@ -67,16 +78,20 @@ export type Page<T> = {
   totalPages: number;
   number: number;
   size: number;
+  last?: boolean;
 };
 
 export type NotificationItem = {
-  id: number;
-  userId: number;
+  id: string;
+  userId: string;
   type: string;
   title: string;
   body?: string | null;
+  summary?: string | null;
   linkUrl?: string | null;
+  mediaUrl?: string | null;
   actorUsername?: string | null;
+  postTitle?: string | null;
   resourceType?: string | null;
   resourceId?: string | null;
   readAt?: string | null;
@@ -85,7 +100,7 @@ export type NotificationItem = {
 };
 
 export type FollowStatus = {
-  userId: number;
+  userId: string;
   username: string;
   following: boolean;
   followerCount: number;
@@ -93,15 +108,17 @@ export type FollowStatus = {
 };
 
 export type AuditEvent = {
-  id: number;
+  id: string;
   occurredAt: string;
   serviceName: string;
   action: string;
   resourceType: string;
   resourceId?: string | null;
-  actorUserId?: number | null;
+  actorUserId?: string | null;
   actorUsername?: string | null;
   summary?: string | null;
+  beforeData?: string | null;
+  afterData?: string | null;
   requestId?: string | null;
 };
 
@@ -119,12 +136,62 @@ export type PlatformReport = {
   generatedAt: string;
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 const TOKEN_KEY = 'threadly_token';
 
-export function getApiUrl() {
-  return API_URL;
+/**
+ * Public API base URL.
+ *
+ * Deploy: set {@code NEXT_PUBLIC_API_URL} at **build** time (Next inlines it), e.g.
+ * {@code https://api.yourdomain.com} — not {@code localhost}.
+ * Dev default uses the browser host on port 8080 when env is unset.
+ */
+export function getApiUrl(): string {
+  const env = (process.env.NEXT_PUBLIC_API_URL || '').trim().replace(/\/$/, '');
+  if (env) return env;
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname } = window.location;
+    // Same machine / host default gateway — works for LAN IP as well as localhost.
+    return `${protocol}//${hostname}:8080`;
+  }
+  return 'http://localhost:8080';
 }
+
+/** STOMP WebSocket endpoint (proxied by API gateway → community-service). */
+export function getCommunityChatWsUrl(): string {
+  const env = (process.env.NEXT_PUBLIC_WS_URL || '').trim().replace(/\/$/, '');
+  if (env) return env;
+  const api = getApiUrl();
+  return api.replace(/^http/i, 'ws') + '/ws/community-chat';
+}
+
+/** Optional ops UI links — set per environment at build time. */
+export function getGrafanaUrl(): string {
+  return (process.env.NEXT_PUBLIC_GRAFANA_URL || 'http://localhost:3001').replace(/\/$/, '');
+}
+
+export function getPrometheusUrl(): string {
+  return (process.env.NEXT_PUBLIC_PROMETHEUS_URL || 'http://localhost:9090').replace(/\/$/, '');
+}
+
+/** Direct media content URL (public GET) — use in <img> instead of blob downloads. */
+export function mediaContentUrl(mediaId: string) {
+  return `${getApiUrl()}/api/v1/media/${mediaId}/content`;
+}
+
+export type OpsMetrics = {
+  prometheusAvailable: boolean;
+  generatedAt: string;
+  requestRateByService: Record<string, number>;
+  p95LatencySecondsByService: Record<string, number>;
+  error5xxRateByService: Record<string, number>;
+  heapUsedBytesByService: Record<string, number>;
+  charts: {
+    id: string;
+    title: string;
+    unit: string;
+    lines: { label: string; points: { t: number; v: number }[] }[];
+  }[];
+};
 
 export function getStoredToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -139,9 +206,6 @@ export class ApiError extends Error {
   }
 }
 
-/**
- * Map API failures to short, actionable messages for toasts.
- */
 export function friendlyError(err: unknown, fallback = 'Something went wrong. Try again.'): string {
   if (err instanceof ApiError) {
     const msg = (err.message || '').trim();
@@ -156,7 +220,6 @@ export function friendlyError(err: unknown, fallback = 'Something went wrong. Tr
     if (err.status === 413 || /too large/i.test(msg)) return 'File is too large. Use a smaller file.';
     if (err.status === 429) return 'Too many requests. Wait a minute and try again.';
     if (err.status >= 500) return 'Server error. Please try again shortly.';
-    // Prefer short backend messages; strip stack-ish noise
     if (msg && msg.length <= 140 && !/exception|stacktrace|at com\./i.test(msg)) {
       return msg.endsWith('.') ? msg : `${msg}.`;
     }
@@ -168,16 +231,28 @@ export function friendlyError(err: unknown, fallback = 'Something went wrong. Tr
   return fallback;
 }
 
-const PUBLIC_PREFIXES = [
+const PUBLIC_AUTH_PREFIXES = [
   '/api/v1/auth/login',
   '/api/v1/auth/signup',
   '/api/v1/auth/forgot-password',
   '/api/v1/auth/reset-password',
 ];
 
-/**
- * All business APIs require `Authorization: Bearer <jwt>` except public auth routes.
- */
+/** List/browse GETs work without a session; by-id and mutations need JWT. */
+function isPublicApiPath(path: string, method = 'GET'): boolean {
+  const base = path.split('?')[0];
+  const m = method.toUpperCase();
+  if (PUBLIC_AUTH_PREFIXES.some((p) => base.startsWith(p))) return true;
+  if (m !== 'GET') return false;
+  if (base === '/api/v1/posts' || base === '/api/v1/communities' || base === '/api/v1/communities/discover') {
+    return true;
+  }
+  if (base.startsWith('/api/v1/communities/by-slug/')) return true;
+  if (/^\/api\/v1\/media\/[^/]+(\/content)?$/.test(base)) return true;
+  if (base.startsWith('/api/v1/profiles/') && !base.includes('/follow')) return true;
+  return false;
+}
+
 export async function api<T>(
   path: string,
   options: RequestInit = {},
@@ -188,7 +263,8 @@ export async function api<T>(
     headers.set('Content-Type', 'application/json');
   }
   const bearer = token !== undefined ? token : getStoredToken();
-  const isPublic = PUBLIC_PREFIXES.some((p) => path.startsWith(p));
+  const method = (options.method || 'GET').toUpperCase();
+  const isPublic = isPublicApiPath(path, method);
   if (bearer) {
     headers.set('Authorization', `Bearer ${bearer}`);
   } else if (!isPublic) {
@@ -197,7 +273,7 @@ export async function api<T>(
 
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, {
+    res = await fetch(`${getApiUrl()}${path}`, {
       ...options,
       headers,
       cache: 'no-store',

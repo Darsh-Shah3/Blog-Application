@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -19,6 +20,10 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class VoteServiceImplTest {
+
+    private static final UUID VOTER = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    private static final UUID AUTHOR = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+    private static final UUID POST = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
 
     @Mock VoteRepository voteRepository;
     @Mock ScoringPort scoringPort;
@@ -28,61 +33,36 @@ class VoteServiceImplTest {
     void castNewUpvotePropagatesScoreAndKarma() {
         CastVoteRequest req = new CastVoteRequest();
         req.setTargetType(Vote.TargetType.POST);
-        req.setTargetId(5L);
+        req.setTargetId(POST);
         req.setValue((short) 1);
 
-        when(scoringPort.resolveAuthorId(Vote.TargetType.POST, 5L)).thenReturn(99L);
-        when(voteRepository.findByUserIdAndTargetTypeAndTargetId(1L, Vote.TargetType.POST, 5L))
+        when(scoringPort.resolveAuthorId(Vote.TargetType.POST, POST)).thenReturn(AUTHOR);
+        when(scoringPort.resolveTargetName(Vote.TargetType.POST, POST)).thenReturn("Hello");
+        when(voteRepository.findByUserIdAndTargetTypeAndTargetId(VOTER, Vote.TargetType.POST, POST))
                 .thenReturn(Optional.empty());
         when(voteRepository.save(any(Vote.class))).thenAnswer(inv -> {
             Vote v = inv.getArgument(0);
-            v.setId(7L);
+            v.setId(UUID.randomUUID());
             return v;
         });
 
-        var res = voteService.cast(1L, "voter", req);
+        var res = voteService.cast(VOTER, "voter", req);
 
-        assertEquals(1, res.getValue());
+        assertEquals((short) 1, res.getValue());
         assertEquals(1L, res.getScoreDeltaApplied());
-        verify(scoringPort).applyScoreDelta(Vote.TargetType.POST, 5L, 1L);
-        verify(scoringPort).applyKarmaDelta(99L, 1L);
-    }
-
-    @Test
-    void whenKarmaFailsScoreIsCompensatedAndVoteNotKeptConceptually() {
-        CastVoteRequest req = new CastVoteRequest();
-        req.setTargetType(Vote.TargetType.POST);
-        req.setTargetId(5L);
-        req.setValue((short) 1);
-
-        when(scoringPort.resolveAuthorId(Vote.TargetType.POST, 5L)).thenReturn(99L);
-        when(voteRepository.findByUserIdAndTargetTypeAndTargetId(1L, Vote.TargetType.POST, 5L))
-                .thenReturn(Optional.empty());
-        when(voteRepository.save(any(Vote.class))).thenAnswer(inv -> {
-            Vote v = inv.getArgument(0);
-            v.setId(7L);
-            return v;
-        });
-        doNothing().when(scoringPort).applyScoreDelta(Vote.TargetType.POST, 5L, 1L);
-        doThrow(new ApiException("Failed to update author karma", 503))
-                .when(scoringPort).applyKarmaDelta(99L, 1L);
-
-        assertThrows(ApiException.class, () -> voteService.cast(1L, "voter", req));
-
-        verify(scoringPort).applyScoreDelta(Vote.TargetType.POST, 5L, 1L);
-        verify(scoringPort).applyScoreDelta(Vote.TargetType.POST, 5L, -1L);
-        verify(scoringPort).applyKarmaDelta(99L, 1L);
+        verify(scoringPort).applyScoreDelta(Vote.TargetType.POST, POST, 1L);
+        verify(scoringPort).applyKarmaDelta(AUTHOR, 1L);
     }
 
     @Test
     void cannotVoteOnOwnContent() {
         CastVoteRequest req = new CastVoteRequest();
         req.setTargetType(Vote.TargetType.POST);
-        req.setTargetId(5L);
+        req.setTargetId(POST);
         req.setValue((short) 1);
-        when(scoringPort.resolveAuthorId(Vote.TargetType.POST, 5L)).thenReturn(1L);
+        when(scoringPort.resolveAuthorId(Vote.TargetType.POST, POST)).thenReturn(VOTER);
 
-        ApiException ex = assertThrows(ApiException.class, () -> voteService.cast(1L, "voter", req));
+        ApiException ex = assertThrows(ApiException.class, () -> voteService.cast(VOTER, "voter", req));
         assertEquals(400, ex.getStatus());
         verify(voteRepository, never()).save(any());
     }

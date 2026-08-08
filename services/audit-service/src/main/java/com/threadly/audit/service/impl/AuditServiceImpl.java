@@ -20,6 +20,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +43,8 @@ public class AuditServiceImpl implements AuditService {
                 .actorUsername(request.getActorUsername())
                 .summary(request.getSummary())
                 .metadata(request.getMetadata())
+                .beforeData(request.getBeforeData())
+                .afterData(request.getAfterData())
                 .requestId(request.getRequestId())
                 .occurredAt(Instant.now())
                 .build();
@@ -55,19 +58,31 @@ public class AuditServiceImpl implements AuditService {
     @Transactional(readOnly = true)
     public Page<AuditEventResponse> search(
             String service, String action, String resourceType,
-            String actorUsername, Long actorUserId, String q,
+            String actorUsername, java.util.UUID actorUserId, String q,
             Instant from, Instant to, Pageable pageable) {
-        String svc = blankToNull(service);
-        String act = blankToNull(action);
-        if (act != null) {
+        // Empty-string / open bounds — never null Instant/UUID — so Postgres always has a typed param.
+        String svc = blankToEmpty(service);
+        String act = blankToEmpty(action);
+        if (!act.isEmpty()) {
             act = act.toUpperCase();
         }
-        String rt = blankToNull(resourceType);
-        if (rt != null) {
+        String rt = blankToEmpty(resourceType);
+        if (!rt.isEmpty()) {
             rt = rt.toUpperCase();
         }
-        return repository.search(svc, act, rt, blankToNull(actorUsername), actorUserId,
-                blankToNull(q), from, to, pageable).map(this::toResponse);
+        String actorName = blankToEmpty(actorUsername);
+        if (!actorName.isEmpty()) {
+            actorName = actorName.toLowerCase(java.util.Locale.ROOT);
+        }
+        String pattern = "";
+        if (q != null && !q.isBlank()) {
+            pattern = "%" + q.trim().toLowerCase(java.util.Locale.ROOT) + "%";
+        }
+        Instant fromBound = from != null ? from : Instant.EPOCH;
+        Instant toBound = to != null ? to : Instant.parse("9999-12-31T23:59:59Z");
+        UUID actorId = actorUserId != null ? actorUserId : new UUID(0L, 0L);
+        return repository.search(svc, act, rt, actorName, actorUserId != null, actorId,
+                pattern, fromBound, toBound, pageable).map(this::toResponse);
     }
 
     @Override
@@ -113,8 +128,8 @@ public class AuditServiceImpl implements AuditService {
         return map;
     }
 
-    private String blankToNull(String s) {
-        return s == null || s.isBlank() ? null : s.trim();
+    private String blankToEmpty(String s) {
+        return s == null || s.isBlank() ? "" : s.trim();
     }
 
     private AuditEventResponse toResponse(AuditEvent e) {
@@ -129,6 +144,8 @@ public class AuditServiceImpl implements AuditService {
                 .actorUsername(e.getActorUsername())
                 .summary(e.getSummary())
                 .metadata(e.getMetadata())
+                .beforeData(e.getBeforeData())
+                .afterData(e.getAfterData())
                 .requestId(e.getRequestId())
                 .build();
     }

@@ -2,29 +2,29 @@ package com.threadly.post.mapper;
 
 import com.threadly.post.dto.PostResponse;
 import com.threadly.post.entity.Post;
-import com.threadly.post.port.CommunitySummary;
-import com.threadly.post.port.UserSummary;
 import org.springframework.stereotype.Component;
 
 @Component
 public class PostMapper {
 
-    public PostResponse toResponse(Post post, CommunitySummary community, UserSummary author) {
+    public PostResponse toResponse(Post post) {
         return PostResponse.builder()
                 .id(post.getId())
                 .communityId(post.getCommunityId())
-                .communityName(community != null ? community.name() : null)
-                .communitySlug(community != null ? community.slug() : null)
+                .communityName(post.getCommunity() != null ? post.getCommunity().getName() : null)
+                .communitySlug(post.getCommunity() != null ? post.getCommunity().getSlug() : null)
                 .authorId(post.getAuthorId())
-                .authorUsername(author != null ? author.username() : null)
+                .authorUsername(post.getAuthor() != null ? post.getAuthor().getUsername() : null)
                 .title(post.getTitle())
                 .content(post.getContent())
                 .postType(post.getPostType())
-                .linkUrl(post.getLinkUrl())
-                .mediaId(post.getMediaId())
+                .linkUrls(post.getLinkUrls())
+                .media(post.getMedia())
                 .score(post.getScore())
                 .commentCount(post.getCommentCount())
                 .createdAt(post.getCreatedAt())
+                .scheduledAt(post.getScheduledAt())
+                .status(post.getStatus() != null ? post.getStatus().name() : Post.Status.PUBLISHED.name())
                 .createdBy(post.getCreatedBy())
                 .updatedBy(post.getUpdatedBy())
                 .build();

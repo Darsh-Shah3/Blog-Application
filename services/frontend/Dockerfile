@@ -7,9 +7,15 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-ARG NEXT_PUBLIC_API_URL=http://localhost:8080
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-RUN npm run build
+      ARG NEXT_PUBLIC_API_URL=http://localhost:8080
+      ARG NEXT_PUBLIC_WS_URL=
+      ARG NEXT_PUBLIC_GRAFANA_URL=http://localhost:3001
+      ARG NEXT_PUBLIC_PROMETHEUS_URL=http://localhost:9090
+      ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+      ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
+      ENV NEXT_PUBLIC_GRAFANA_URL=$NEXT_PUBLIC_GRAFANA_URL
+      ENV NEXT_PUBLIC_PROMETHEUS_URL=$NEXT_PUBLIC_PROMETHEUS_URL
+      RUN npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app

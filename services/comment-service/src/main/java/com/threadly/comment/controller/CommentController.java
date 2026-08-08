@@ -6,15 +6,15 @@ import com.threadly.comment.exception.ApiException;
 import com.threadly.comment.service.CommentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.util.UUID;
 
-/**
- * Nested discussion APIs. Thread listing is namespaced under {@code /threads/{postId}}.
- */
 @RestController
 @RequestMapping("/api/v1/comments")
 @RequiredArgsConstructor
@@ -24,7 +24,7 @@ public class CommentController {
 
     @PostMapping
     public ResponseEntity<CommentResponse> create(
-            @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
             @RequestHeader(value = "X-Username", required = false) String username,
             @Valid @RequestBody CreateCommentRequest request) {
         if (userId == null) {
@@ -33,21 +33,23 @@ public class CommentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(commentService.create(userId, username, request));
     }
 
-    /** Full nested comment tree for one post. */
+    /** Paginated top-level comments + nested reply trees (default 25 per page). */
     @GetMapping("/threads/{postId}")
-    public ResponseEntity<List<CommentResponse>> thread(@PathVariable Long postId) {
-        return ResponseEntity.ok(commentService.treeForPost(postId));
+    public ResponseEntity<Page<CommentResponse>> thread(
+            @PathVariable UUID postId,
+            @PageableDefault(size = 25) Pageable pageable) {
+        return ResponseEntity.ok(commentService.pageRoots(postId, pageable));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<CommentResponse> get(@PathVariable Long id) {
+    public ResponseEntity<CommentResponse> get(@PathVariable UUID id) {
         return ResponseEntity.ok(commentService.get(id));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
-            @PathVariable Long id,
-            @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+            @PathVariable UUID id,
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId) {
         if (userId == null) {
             throw new ApiException("Authentication required", 401);
         }

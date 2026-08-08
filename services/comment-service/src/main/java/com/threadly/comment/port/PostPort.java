@@ -1,9 +1,13 @@
 package com.threadly.comment.port;
 
-/** Verifies post existence and updates counters without coupling to HTTP types. */
+import java.util.Optional;
+import java.util.UUID;
+
 public interface PostPort {
 
-    void ensureExists(Long postId);
+    Optional<PostSummary> findById(UUID postId);
 
-    void adjustCommentCount(Long postId, long delta);
+    void ensureExists(UUID postId);
+
+    void adjustCommentCount(UUID postId, long delta);
 }

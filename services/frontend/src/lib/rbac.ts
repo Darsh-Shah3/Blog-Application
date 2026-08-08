@@ -22,10 +22,10 @@ export function isModerator(user: User | null | undefined): boolean {
 
 export function canDeleteContent(
   user: User | null | undefined,
-  authorId: number
+  authorId: number | string
 ): boolean {
   if (!user) return false;
-  if (user.id === authorId) return true;
+  if (user.id === authorId || String(user.id) === String(authorId)) return true;
   if (user.permissions?.includes('CONTENT_DELETE_ANY')) return true;
   return isModerator(user);
 }

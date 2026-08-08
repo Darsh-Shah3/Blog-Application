@@ -3,10 +3,12 @@ package com.threadly.auth.service.impl;
 import com.threadly.auth.dto.*;
 import com.threadly.auth.entity.Role;
 import com.threadly.auth.entity.User;
+import com.threadly.auth.entity.UserFollow;
 import com.threadly.auth.exception.ApiException;
 import com.threadly.auth.mapper.UserMapper;
 import com.threadly.auth.rbac.RbacCatalog;
 import com.threadly.auth.repository.RoleRepository;
+import com.threadly.auth.repository.UserFollowRepository;
 import com.threadly.auth.repository.UserRepository;
 import com.threadly.auth.security.JwtTokenProvider;
 import com.threadly.auth.service.AuthService;
@@ -21,12 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.UUID;
 
-/**
- * Default auth use-case orchestrator.
- * Depends only on repository abstractions, password hashing port, JWT port, and mapper —
- * so infrastructure can be swapped without touching API controllers.
- */
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
@@ -35,6 +33,7 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final UserFollowRepository followRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final UserMapper userMapper;
@@ -66,8 +65,9 @@ public class AuthServiceImpl implements AuthService {
                 .createdBy(username)
                 .updatedBy(username)
                 .build();
-        user.getRoles().add(userRole);
+        user.addRole(userRole);
         user = userRepository.save(user);
+        ensureSocialRow(user);
         log.info("User registered id={} username={}", user.getId(), user.getUsername());
         return toAuthResponse(user);
     }
@@ -93,7 +93,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional(readOnly = true)
-    public UserResponse getById(Long id) {
+    public UserResponse getById(UUID id) {
         log.debug("Get user by id={}", id);
         return userMapper.toResponse(findActiveUser(id));
     }
@@ -109,7 +109,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public UserResponse updateProfile(Long userId, UpdateProfileRequest request) {
+    public UserResponse updateProfile(UUID userId, UpdateProfileRequest request) {
         log.info("Update profile userId={}", userId);
         User user = findActiveUser(userId);
         if (request.getDisplayName() != null && !request.getDisplayName().isBlank()) {
@@ -124,7 +124,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public UserResponse adjustKarma(Long userId, long delta) {
+    public UserResponse adjustKarma(UUID userId, long delta) {
         log.info("Adjust karma userId={} delta={}", userId, delta);
         User user = findActiveUser(userId);
         user.setKarma(user.getKarma() + delta);
@@ -134,7 +134,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public void softDeleteAccount(Long userId) {
+    public void softDeleteAccount(UUID userId) {
         User user = findActiveUser(userId);
         softDelete(user, user.getUsername());
         log.info("User soft-deleted self id={} username={}", userId, user.getUsername());
@@ -146,7 +146,16 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
     }
 
-    private User findActiveUser(Long id) {
+    private void ensureSocialRow(User user) {
+        if (followRepository.findByUserId(user.getId()).isEmpty()) {
+            followRepository.save(UserFollow.builder()
+                    .userId(user.getId())
+                    .username(user.getUsername())
+                    .build());
+        }
+    }
+
+    private User findActiveUser(UUID id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> {
                     log.warn("User not found id={}", id);

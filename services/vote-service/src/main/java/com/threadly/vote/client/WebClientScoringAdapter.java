@@ -13,11 +13,8 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.UUID;
 
-/**
- * HTTP fan-out for vote side effects.
- * Failures throw so callers can roll back local transaction and compensate partial remote writes.
- */
 @Component
 public class WebClientScoringAdapter implements ScoringPort {
 
@@ -36,25 +33,38 @@ public class WebClientScoringAdapter implements ScoringPort {
     }
 
     @Override
-    public Long resolveAuthorId(Vote.TargetType type, Long targetId) {
+    public UUID resolveAuthorId(Vote.TargetType type, UUID targetId) {
+        TargetInfo info = fetch(type, targetId);
+        return info != null ? info.authorId : null;
+    }
+
+    @Override
+    public String resolveTargetName(Vote.TargetType type, UUID targetId) {
+        TargetInfo info = fetch(type, targetId);
+        if (info == null) return null;
+        if (info.title != null) return info.title;
+        if (info.content != null) {
+            return info.content.length() <= 80 ? info.content : info.content.substring(0, 80) + "…";
+        }
+        return type.name() + " " + targetId;
+    }
+
+    private TargetInfo fetch(Vote.TargetType type, UUID targetId) {
         try {
-            TargetInfo info;
             if (type == Vote.TargetType.POST) {
-                info = postClient.get()
+                return postClient.get()
                         .uri("/api/v1/posts/{id}", targetId)
                         .header("X-Internal-Api-Key", internalApiKey)
                         .retrieve()
                         .bodyToMono(TargetInfo.class)
                         .block(Duration.ofSeconds(3));
-            } else {
-                info = commentClient.get()
-                        .uri("/api/v1/comments/{id}", targetId)
-                        .header("X-Internal-Api-Key", internalApiKey)
-                        .retrieve()
-                        .bodyToMono(TargetInfo.class)
-                        .block(Duration.ofSeconds(3));
             }
-            return info != null ? info.authorId : null;
+            return commentClient.get()
+                    .uri("/api/v1/comments/{id}", targetId)
+                    .header("X-Internal-Api-Key", internalApiKey)
+                    .retrieve()
+                    .bodyToMono(TargetInfo.class)
+                    .block(Duration.ofSeconds(3));
         } catch (WebClientResponseException.NotFound e) {
             throw new ApiException("Target not found", HttpStatus.BAD_REQUEST.value());
         } catch (ApiException e) {
@@ -66,7 +76,7 @@ public class WebClientScoringAdapter implements ScoringPort {
     }
 
     @Override
-    public void applyScoreDelta(Vote.TargetType type, Long targetId, long delta) {
+    public void applyScoreDelta(Vote.TargetType type, UUID targetId, long delta) {
         if (delta == 0) {
             return;
         }
@@ -97,7 +107,7 @@ public class WebClientScoringAdapter implements ScoringPort {
     }
 
     @Override
-    public void applyKarmaDelta(Long authorId, long delta) {
+    public void applyKarmaDelta(UUID authorId, long delta) {
         if (authorId == null || delta == 0) {
             return;
         }
@@ -118,6 +128,8 @@ public class WebClientScoringAdapter implements ScoringPort {
     }
 
     private static class TargetInfo {
-        public Long authorId;
+        public UUID authorId;
+        public String title;
+        public String content;
     }
 }

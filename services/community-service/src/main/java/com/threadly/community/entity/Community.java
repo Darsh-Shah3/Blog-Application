@@ -2,8 +2,12 @@ package com.threadly.community.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.Map;
+import java.util.UUID;
 
 @Entity
 @Table(name = "communities")
@@ -14,8 +18,21 @@ import java.time.Instant;
 @Builder
 public class Community {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private UUID id;
+
+    /** Assign only when unset so seeds can pin stable demo UUIDs. */
+    @PrePersist
+    void ensureId() {
+        if (id == null) {
+            id = UUID.randomUUID();
+        }
+        if (createdAt == null) {
+            createdAt = Instant.now();
+        }
+        if (updatedAt == null) {
+            updatedAt = Instant.now();
+        }
+    }
 
     @Column(nullable = false, length = 100)
     private String name;
@@ -23,11 +40,16 @@ public class Community {
     @Column(nullable = false, unique = true, length = 100)
     private String slug;
 
-    @Column(length = 1000)
+    @Column(length = 500)
     private String description;
 
+    /** Creator snapshot: {id, username}. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(nullable = false, columnDefinition = "jsonb")
+    private Map<String, Object> creator;
+
     @Column(name = "creator_id", nullable = false)
-    private Long creatorId;
+    private UUID creatorId;
 
     @Column(name = "member_count", nullable = false)
     @Builder.Default

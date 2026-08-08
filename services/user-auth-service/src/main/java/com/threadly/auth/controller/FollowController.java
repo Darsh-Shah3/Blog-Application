@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/profiles")
@@ -20,21 +21,21 @@ public class FollowController {
     @PostMapping("/{username}/follow")
     public ResponseEntity<FollowStatusResponse> follow(
             @PathVariable String username,
-            @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId) {
         return ResponseEntity.ok(followService.follow(requireUser(userId), username));
     }
 
     @DeleteMapping("/{username}/follow")
     public ResponseEntity<FollowStatusResponse> unfollow(
             @PathVariable String username,
-            @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId) {
         return ResponseEntity.ok(followService.unfollow(requireUser(userId), username));
     }
 
     @GetMapping("/{username}/follow-status")
     public ResponseEntity<FollowStatusResponse> status(
             @PathVariable String username,
-            @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId) {
         return ResponseEntity.ok(followService.status(userId, username));
     }
 
@@ -48,7 +49,7 @@ public class FollowController {
         return ResponseEntity.ok(followService.following(username));
     }
 
-    private Long requireUser(Long userId) {
+    private UUID requireUser(UUID userId) {
         if (userId == null) {
             throw new ApiException("Authentication required", 401);
         }

@@ -10,6 +10,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Component
 public class WebClientNotificationAdapter implements NotificationPort {
@@ -24,7 +25,8 @@ public class WebClientNotificationAdapter implements NotificationPort {
     }
 
     @Override
-    public void notifyPostCreated(Long authorId, String authorUsername, Long postId, String title, String communitySlug) {
+    public void notifyPostCreated(UUID authorId, String authorUsername, UUID postId, String title,
+                                  String communitySlug, String summary, String mediaUrl) {
         try {
             Map<String, Object> body = new HashMap<>();
             body.put("authorId", authorId);
@@ -32,6 +34,8 @@ public class WebClientNotificationAdapter implements NotificationPort {
             body.put("postId", postId);
             body.put("postTitle", title);
             body.put("communitySlug", communitySlug);
+            body.put("summary", summary);
+            body.put("mediaUrl", mediaUrl);
             webClient.post()
                     .uri("/api/v1/internal/notifications/post-created")
                     .header("X-Internal-Api-Key", internalApiKey)

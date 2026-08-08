@@ -8,12 +8,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
+import java.util.UUID;
 
-public interface PasswordResetTokenRepository extends JpaRepository<PasswordResetToken, Long> {
+public interface PasswordResetTokenRepository extends JpaRepository<PasswordResetToken, UUID> {
 
-    Optional<PasswordResetToken> findByTokenHashAndUsedAtIsNull(String tokenHash);
+    Optional<PasswordResetToken> findByTokenHashAndUsedFalse(String tokenHash);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(AuthQueries.PASSWORD_RESET_DELETE_UNUSED_FOR_USER)
-    void deleteUnusedForUser(@Param("userId") Long userId);
+    void deleteUnusedForUser(@Param("userId") UUID userId);
 }

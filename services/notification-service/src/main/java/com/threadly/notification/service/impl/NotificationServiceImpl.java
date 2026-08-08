@@ -1,6 +1,7 @@
 package com.threadly.notification.service.impl;
 
 import com.threadly.notification.client.AuthClient;
+import com.threadly.notification.dto.CommunityChatEventRequest;
 import com.threadly.notification.dto.NotificationResponse;
 import com.threadly.notification.dto.PostCreatedEventRequest;
 import com.threadly.notification.dto.SystemNotifyRequest;
@@ -20,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -36,15 +39,14 @@ public class NotificationServiceImpl implements NotificationService {
     public void onPostCreated(PostCreatedEventRequest request) {
         List<AuthClient.FollowerContact> followers = authClient.listFollowers(request.getAuthorId());
         if (followers.isEmpty()) {
-            log.info("No followers to notify for postId={} author={}", request.getPostId(), request.getAuthorUsername());
+            log.info("No followers to notify for postId={}", request.getPostId());
             return;
         }
         String link = "/post/" + request.getPostId();
-        String title = "@" + request.getAuthorUsername() + " published a new post";
-        String body = "\"" + truncate(request.getPostTitle(), 120) + "\"";
-        if (request.getCommunitySlug() != null && !request.getCommunitySlug().isBlank()) {
-            body += " in r/" + request.getCommunitySlug();
-        }
+        String title = request.getPostTitle();
+        String summary = request.getSummary() != null && !request.getSummary().isBlank()
+                ? request.getSummary()
+                : ("New post from @" + request.getAuthorUsername());
 
         for (AuthClient.FollowerContact follower : followers) {
             if (follower.id() == null || follower.id().equals(request.getAuthorId())) {
@@ -52,19 +54,69 @@ public class NotificationServiceImpl implements NotificationService {
             }
             Notification n = repository.save(Notification.builder()
                     .userId(follower.id())
+                    .recipient(Map.of(
+                            "id", follower.id().toString(),
+                            "username", follower.username() == null ? "" : follower.username()))
                     .type("FOLLOW_NEW_POST")
                     .title(title)
-                    .body(body)
+                    .body(summary)
+                    .summary(summary)
                     .linkUrl(link)
+                    .mediaUrl(request.getMediaUrl())
                     .actorUsername(request.getAuthorUsername())
+                    .postTitle(request.getPostTitle())
                     .resourceType("POST")
                     .resourceId(String.valueOf(request.getPostId()))
                     .build());
             mailService.sendNewPostAlert(follower.email(), request.getAuthorUsername(),
                     request.getPostTitle(), link);
-            log.debug("Notified follower={} notifId={} postId={}", follower.id(), n.getId(), request.getPostId());
+            log.debug("Notified follower={} notifId={}", follower.id(), n.getId());
         }
-        log.info("Post-created fanout postId={} followersNotified={}", request.getPostId(), followers.size());
+        log.info("Post-created fanout postId={} followers={}", request.getPostId(), followers.size());
+    }
+
+    @Override
+    @Transactional
+    public void onCommunityChatMessage(CommunityChatEventRequest request) {
+        List<UUID> recipients = request.getRecipientUserIds() == null
+                ? List.of()
+                : request.getRecipientUserIds();
+        if (recipients.isEmpty()) {
+            log.info("No recipients for community chat communityId={}", request.getCommunityId());
+            return;
+        }
+        String author = request.getAuthorUsername() == null || request.getAuthorUsername().isBlank()
+                ? "someone"
+                : request.getAuthorUsername();
+        String title = author + " in " + request.getCommunityName();
+        String preview = request.getBodyPreview() == null ? "" : request.getBodyPreview().trim();
+        if (preview.length() > 160) {
+            preview = preview.substring(0, 157) + "...";
+        }
+        String body = preview.isEmpty()
+                ? ("New message in " + request.getCommunityName())
+                : preview;
+        String link = "/c/" + request.getCommunitySlug();
+        int saved = 0;
+        for (UUID userId : recipients) {
+            if (userId == null || userId.equals(request.getAuthorId())) {
+                continue;
+            }
+            repository.save(Notification.builder()
+                    .userId(userId)
+                    .recipient(Map.of("id", userId.toString(), "username", ""))
+                    .type("COMMUNITY_CHAT")
+                    .title(title)
+                    .body(body)
+                    .summary(body)
+                    .linkUrl(link)
+                    .actorUsername(author)
+                    .resourceType("COMMUNITY_MESSAGE")
+                    .resourceId(String.valueOf(request.getMessageId()))
+                    .build());
+            saved++;
+        }
+        log.info("Community-chat fanout communityId={} notified={}", request.getCommunityId(), saved);
     }
 
     @Override
@@ -72,9 +124,11 @@ public class NotificationServiceImpl implements NotificationService {
     public NotificationResponse notifyUser(SystemNotifyRequest request) {
         Notification n = repository.save(Notification.builder()
                 .userId(request.getUserId())
+                .recipient(Map.of("id", request.getUserId().toString(), "username", ""))
                 .type(request.getType())
                 .title(request.getTitle())
                 .body(request.getBody())
+                .summary(request.getBody())
                 .linkUrl(request.getLinkUrl())
                 .actorUsername(request.getActorUsername())
                 .resourceType(request.getResourceType())
@@ -85,21 +139,25 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<NotificationResponse> list(Long userId, boolean unreadOnly, String type, String q, Pageable pageable) {
+    public Page<NotificationResponse> list(UUID userId, boolean unreadOnly, String type, String q, Pageable pageable) {
         String t = type == null || type.isBlank() ? null : type.trim();
-        String query = q == null || q.isBlank() ? null : q.trim();
-        return repository.search(userId, unreadOnly, t, query, pageable).map(this::toResponse);
+        // Pre-build LIKE pattern in Java so Postgres never lower(bytea) from Hibernate concat.
+        String pattern = null;
+        if (q != null && !q.isBlank()) {
+            pattern = "%" + q.trim().toLowerCase(java.util.Locale.ROOT) + "%";
+        }
+        return repository.search(userId, unreadOnly, t, pattern, pageable).map(this::toResponse);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public long unreadCount(Long userId) {
+    public long unreadCount(UUID userId) {
         return repository.countByUserIdAndReadAtIsNull(userId);
     }
 
     @Override
     @Transactional
-    public NotificationResponse markRead(Long userId, Long notificationId) {
+    public NotificationResponse markRead(UUID userId, UUID notificationId) {
         Notification n = repository.findById(notificationId)
                 .orElseThrow(() -> new ApiException("Notification not found", HttpStatus.NOT_FOUND.value()));
         if (!n.getUserId().equals(userId)) {
@@ -114,7 +172,7 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     @Transactional
-    public int markAllRead(Long userId) {
+    public int markAllRead(UUID userId) {
         Page<Notification> page = repository.search(userId, true, null, null, Pageable.unpaged());
         Instant now = Instant.now();
         int count = 0;
@@ -130,21 +188,20 @@ public class NotificationServiceImpl implements NotificationService {
         return NotificationResponse.builder()
                 .id(n.getId())
                 .userId(n.getUserId())
+                .recipient(n.getRecipient())
                 .type(n.getType())
                 .title(n.getTitle())
                 .body(n.getBody())
+                .summary(n.getSummary())
                 .linkUrl(n.getLinkUrl())
+                .mediaUrl(n.getMediaUrl())
                 .actorUsername(n.getActorUsername())
+                .postTitle(n.getPostTitle())
                 .resourceType(n.getResourceType())
                 .resourceId(n.getResourceId())
                 .readAt(n.getReadAt())
                 .createdAt(n.getCreatedAt())
                 .read(n.getReadAt() != null)
                 .build();
-    }
-
-    private static String truncate(String s, int max) {
-        if (s == null) return "";
-        return s.length() <= max ? s : s.substring(0, max - 1) + "…";
     }
 }
