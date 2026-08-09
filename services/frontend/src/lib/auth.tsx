@@ -8,7 +8,7 @@ type AuthContextValue = {
   token: string | null;
   loading: boolean;
   login: (emailOrUsername: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
+  register: (username: string, email: string, password: string, captchaToken?: string) => Promise<void>;
   /** Store JWT + user from OAuth (or any AuthResponse). */
   applySession: (res: AuthResponse) => void;
   logout: () => void;
@@ -56,10 +56,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       applyAuth(res);
     },
-    async register(username, email, password) {
+    async register(username, email, password, captchaToken) {
       const res = await api<AuthResponse>('/api/v1/auth/signup', {
         method: 'POST',
-        body: JSON.stringify({ username, email, password, displayName: username }),
+        body: JSON.stringify({
+          username,
+          email,
+          password,
+          displayName: username,
+          ...(captchaToken ? { captchaToken } : {}),
+        }),
       });
       applyAuth(res);
     },

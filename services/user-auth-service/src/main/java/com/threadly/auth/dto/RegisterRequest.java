@@ -21,4 +21,10 @@ public class RegisterRequest {
 
     @Size(max = 100)
     private String displayName;
+
+    /**
+     * Google reCAPTCHA v2 response token from the client widget.
+     * Required when captcha is configured on the server; ignored when disabled.
+     */
+    private String captchaToken;
 }

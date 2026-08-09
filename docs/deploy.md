@@ -15,6 +15,7 @@
 4. Edit `.env`:
    - Strong `JWT_SECRET`, `POSTGRES_PASSWORD`, `INTERNAL_API_KEY`
    - `NEXT_PUBLIC_API_URL=http://YOUR_PUBLIC_IP:8080` (or HTTPS reverse proxy URL)
+   - Optional CAPTCHA / Google OAuth / SMTP: see [optional-services-and-urls.md](./optional-services-and-urls.md)
 5. Launch:
    ```bash
    docker compose up -d --build

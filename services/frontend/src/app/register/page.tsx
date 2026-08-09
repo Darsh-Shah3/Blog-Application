@@ -2,14 +2,15 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
-import { friendlyError } from '@/lib/api';
+import { api, CaptchaConfig, friendlyError } from '@/lib/api';
 import { useToast } from '@/lib/toast';
 import { SpinnerLabel } from '@/components/loaders';
 import { useTheme } from '@/lib/theme';
 import { MoonIcon, SunIcon } from '@/components/icons';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
+import { RecaptchaV2, resetRecaptcha } from '@/components/RecaptchaV2';
 
 type Step = 'consent' | 'form';
 
@@ -26,8 +27,35 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [captcha, setCaptcha] = useState<CaptchaConfig | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaLoadError, setCaptchaLoadError] = useState<string | null>(null);
 
   const allConsented = eduOk && riskOk && liabilityOk;
+  const captchaRequired = Boolean(captcha?.enabled && captcha.siteKey);
+  const captchaPending = step === 'form' && captcha === null && !captchaLoadError;
+  const captchaReady = !captchaRequired || Boolean(captchaToken);
+
+  useEffect(() => {
+    if (step !== 'form') return;
+    let cancelled = false;
+    setCaptcha(null);
+    setCaptchaLoadError(null);
+    setCaptchaToken(null);
+    api<CaptchaConfig>('/api/v1/auth/captcha-config')
+      .then((cfg) => {
+        if (!cancelled) setCaptcha(cfg);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCaptcha(null);
+          setCaptchaLoadError('Could not load CAPTCHA settings. Refresh the page and try again.');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [step]);
 
   const acceptConsent = () => {
     if (!allConsented) {
@@ -49,12 +77,18 @@ export default function RegisterPage() {
       error('You must accept the educational disclaimer before creating an account.');
       return;
     }
+    if (captchaRequired && !captchaToken) {
+      error('Please complete the CAPTCHA.');
+      return;
+    }
     setBusy(true);
     try {
-      await register(username, email, password);
+      await register(username, email, password, captchaToken || undefined);
       success('Account created. Welcome!');
       router.push('/');
     } catch (err) {
+      resetRecaptcha();
+      setCaptchaToken(null);
       error(friendlyError(err, 'Could not create account.'));
     } finally {
       setBusy(false);
@@ -196,7 +230,31 @@ export default function RegisterPage() {
                   autoComplete="new-password"
                 />
               </label>
-              <button className="btn" type="submit" disabled={busy || !allConsented}>
+
+              {captchaLoadError ? (
+                <p className="field-error muted">{captchaLoadError}</p>
+              ) : null}
+
+              {captchaPending ? (
+                <p className="muted captcha-loading">Loading CAPTCHA…</p>
+              ) : null}
+
+              {captchaRequired && captcha?.siteKey ? (
+                <div className="captcha-block">
+                  <span className="captcha-label">Verify you are human</span>
+                  <RecaptchaV2
+                    siteKey={captcha.siteKey}
+                    theme={theme === 'dark' ? 'dark' : 'light'}
+                    onToken={setCaptchaToken}
+                  />
+                </div>
+              ) : null}
+
+              <button
+                className="btn"
+                type="submit"
+                disabled={busy || !allConsented || !captchaReady || captchaPending || Boolean(captchaLoadError)}
+              >
                 {busy ? <SpinnerLabel label="Creating…" /> : 'Sign up'}
               </button>
             </form>

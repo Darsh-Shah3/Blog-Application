@@ -28,6 +28,12 @@ export type AuthResponse = {
   user: User;
 };
 
+export type CaptchaConfig = {
+  enabled: boolean;
+  provider?: string | null;
+  siteKey?: string | null;
+};
+
 export type Community = {
   id: string;
   name: string;
@@ -250,6 +256,7 @@ const PUBLIC_AUTH_PREFIXES = [
   '/api/v1/auth/signup',
   '/api/v1/auth/forgot-password',
   '/api/v1/auth/reset-password',
+  '/api/v1/auth/captcha-config',
   '/api/v1/auth/oauth/',
 ];
 

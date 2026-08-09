@@ -26,6 +26,7 @@ public final class PublicRoutes {
                 || path.equals("/api/v1/auth/login")
                 || path.equals("/api/v1/auth/forgot-password")
                 || path.equals("/api/v1/auth/reset-password")
+                || path.equals("/api/v1/auth/captcha-config")
                 // Social login start + callback — guests must reach these without a JWT
                 || path.startsWith("/api/v1/auth/oauth/")) {
             return true;

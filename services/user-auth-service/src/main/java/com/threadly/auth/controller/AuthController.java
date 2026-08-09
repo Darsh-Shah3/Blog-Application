@@ -2,6 +2,7 @@ package com.threadly.auth.controller;
 
 import com.threadly.auth.dto.*;
 import com.threadly.auth.service.AuthService;
+import com.threadly.auth.service.CaptchaService;
 import com.threadly.auth.service.OAuthService;
 import com.threadly.auth.service.PasswordResetService;
 import jakarta.validation.Valid;
@@ -21,6 +22,13 @@ public class AuthController {
     private final AuthService authService;
     private final PasswordResetService passwordResetService;
     private final OAuthService oAuthService;
+    private final CaptchaService captchaService;
+
+    /** Public: whether signup CAPTCHA is required + site key for the widget. */
+    @GetMapping("/captcha-config")
+    public ResponseEntity<CaptchaConfigResponse> captchaConfig() {
+        return ResponseEntity.ok(captchaService.config());
+    }
 
     @PostMapping("/signup")
     public ResponseEntity<AuthResponse> signup(@Valid @RequestBody RegisterRequest request) {

@@ -12,6 +12,7 @@ import com.threadly.auth.repository.UserFollowRepository;
 import com.threadly.auth.repository.UserRepository;
 import com.threadly.auth.security.JwtTokenProvider;
 import com.threadly.auth.service.AuthService;
+import com.threadly.auth.service.CaptchaService;
 import com.threadly.auth.util.AuditActors;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -20,6 +21,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -37,11 +40,13 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final UserMapper userMapper;
+    private final CaptchaService captchaService;
 
     @Override
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         log.info("Register attempt username={} email={}", request.getUsername(), request.getEmail());
+        captchaService.verifySignupToken(request.getCaptchaToken(), clientIp());
         if (userRepository.existsActiveByEmail(request.getEmail())) {
             log.warn("Register failed email already registered email={}", request.getEmail());
             throw new ApiException("Email already registered", HttpStatus.CONFLICT.value());
@@ -262,5 +267,22 @@ public class AuthServiceImpl implements AuthService {
                 .tokenType("Bearer")
                 .user(userMapper.toResponse(user))
                 .build();
+    }
+
+    private static String clientIp() {
+        try {
+            var attrs = RequestContextHolder.getRequestAttributes();
+            if (!(attrs instanceof ServletRequestAttributes sra)) {
+                return null;
+            }
+            var request = sra.getRequest();
+            String forwarded = request.getHeader("X-Forwarded-For");
+            if (forwarded != null && !forwarded.isBlank()) {
+                return forwarded.split(",")[0].trim();
+            }
+            return request.getRemoteAddr();
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 }

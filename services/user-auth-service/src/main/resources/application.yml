@@ -68,6 +68,10 @@ app:
     google:
       client-id: ${OAUTH_GOOGLE_CLIENT_ID:}
       client-secret: ${OAUTH_GOOGLE_CLIENT_SECRET:}
+  captcha:
+    recaptcha:
+      site-key: ${RECAPTCHA_SITE_KEY:}
+      secret-key: ${RECAPTCHA_SECRET_KEY:}
 
 springdoc:
   api-docs:

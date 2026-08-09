@@ -188,6 +188,7 @@ Point services at local Postgres hosts/DBs as in `.env.example`.
 | [docs/notifications-audit-follows.md](docs/notifications-audit-follows.md) | Follows, inbox, audit, reports |
 | [docs/coding-conventions.md](docs/coding-conventions.md) | Layered style (controller → service → ports) |
 | [docs/deploy.md](docs/deploy.md) | Free / single-VM Compose, optional Vercel frontend |
+| [docs/optional-services-and-urls.md](docs/optional-services-and-urls.md) | Toggle CAPTCHA / OAuth / SMTP; change public URLs after deploy |
 | [docs/resume-bullets.md](docs/resume-bullets.md) | Resume-ready project bullets |
 
 ## Security notes

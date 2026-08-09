@@ -10,6 +10,7 @@ import com.threadly.auth.repository.RoleRepository;
 import com.threadly.auth.repository.UserFollowRepository;
 import com.threadly.auth.repository.UserRepository;
 import com.threadly.auth.security.JwtTokenProvider;
+import com.threadly.auth.service.CaptchaService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +37,7 @@ class AuthServiceImplTest {
     @Mock PasswordEncoder passwordEncoder;
     @Mock JwtTokenProvider jwtTokenProvider;
     @Mock UserMapper userMapper;
+    @Mock CaptchaService captchaService;
 
     @InjectMocks AuthServiceImpl authService;
 

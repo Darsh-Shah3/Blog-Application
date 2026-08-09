@@ -3393,6 +3393,33 @@ textarea {
   text-underline-offset: 2px;
 }
 
+.captcha-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0.15rem 0 0.35rem;
+}
+
+.captcha-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.recaptcha-field {
+  min-height: 78px;
+}
+
+.recaptcha-widget {
+  transform-origin: left top;
+}
+
+.field-error {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: var(--danger, #c45c5c);
+}
+
 .auth-footer {
   display: flex;
   flex-direction: column;
