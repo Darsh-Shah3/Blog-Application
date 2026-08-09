@@ -78,21 +78,39 @@ public class User {
         return userRoles.stream().map(UserRole::getRole).collect(Collectors.toCollection(HashSet::new));
     }
 
+    /**
+     * Sync join rows to {@code roles}. Diff in place so re-assigning an existing
+     * role (e.g. always keeping ROLE_USER) does not re-insert the same (user, role).
+     * Full clear()+re-add races Hibernate insert-before-delete against the unique key.
+     */
     public void replaceRoles(Set<Role> roles) {
         if (userRoles == null) {
             userRoles = new HashSet<>();
         }
-        userRoles.clear();
+        Set<UUID> wantedIds = roles == null
+                ? java.util.Set.of()
+                : roles.stream().map(Role::getId).collect(Collectors.toSet());
+
+        userRoles.removeIf(ur -> ur.getRole() == null || !wantedIds.contains(ur.getRole().getId()));
+
+        Set<UUID> existingIds = userRoles.stream()
+                .map(ur -> ur.getRole().getId())
+                .collect(Collectors.toSet());
+
         if (roles == null) {
             return;
         }
         for (Role role : roles) {
+            if (role == null || role.getId() == null || existingIds.contains(role.getId())) {
+                continue;
+            }
             userRoles.add(UserRole.builder()
                     .user(this)
                     .role(role)
                     .username(this.username)
                     .roleName(role.getName())
                     .build());
+            existingIds.add(role.getId());
         }
     }
 

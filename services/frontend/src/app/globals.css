@@ -879,11 +879,68 @@ a {
   border-bottom: 1px solid var(--line);
 }
 
+.role-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.role-pill {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 650;
+  font-family: inherit;
+  cursor: pointer;
+  line-height: 1.2;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.role-pill:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+
+.role-pill.is-active {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+}
+
+.admin-role-help {
+  margin: 0 0 0.85rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.btn-sm {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.82rem;
+}
+
+.profile-admin-roles {
+  margin-top: 0.85rem;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 88%, var(--accent-3));
+}
+
+.profile-admin-roles h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
 .role-toggles {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.55rem;
+  margin-top: 0.55rem;
 }
 
 .role-check {
@@ -5320,34 +5377,41 @@ button.composer-shortcut-input {
 
 .admin-kpi-board {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.65rem;
   align-items: stretch;
 }
 
 .admin-kpi {
-  padding: 0.85rem 0.9rem;
+  padding: 0.85rem 0.95rem;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--panel);
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.35rem;
+  min-width: 0;
 }
 
 .admin-kpi-label {
-  font-size: 0.72rem;
+  display: block;
+  font-size: 0.75rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
+  line-height: 1.25;
 }
 
+.admin-kpi-value,
 .admin-kpi strong {
+  display: block;
   font-family: var(--font-display);
   font-size: 1.45rem;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
+  color: var(--ink);
 }
 
 .admin-kpi-foot {
@@ -5377,7 +5441,7 @@ button.composer-shortcut-input {
 
 .admin-split {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr);
   gap: 1rem;
   align-items: start;
 }
@@ -5388,6 +5452,7 @@ button.composer-shortcut-input {
   background: var(--panel);
   padding: 1rem 1.1rem 1.15rem;
   min-width: 0;
+  overflow: hidden;
 }
 
 .admin-card-warn {
@@ -5413,45 +5478,88 @@ button.composer-shortcut-input {
 .admin-user-table {
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: 0.75rem;
 }
 
 .admin-user-card {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem 1rem;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 0.8rem 0.85rem;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: color-mix(in srgb, var(--bg) 40%, var(--panel));
+  min-width: 0;
 }
 
 .admin-user-main {
   display: flex;
-  gap: 0.7rem;
+  gap: 0.75rem;
   align-items: flex-start;
   min-width: 0;
+  width: 100%;
+}
+
+.admin-user-copy {
+  min-width: 0;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.admin-user-name {
+  display: block;
+  font-size: 1rem;
+  line-height: 1.3;
+  word-break: break-word;
 }
 
 .admin-user-avatar {
-  width: 2.35rem;
-  height: 2.35rem;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  border-radius: 10px !important;
   flex-shrink: 0;
-  background: linear-gradient(145deg, var(--accent-3), var(--accent-2));
-  color: #fff;
-  font-size: 0.95rem;
+  object-fit: cover;
 }
 
 .admin-user-meta {
-  margin: 0.15rem 0 0.35rem;
+  margin: 0;
   font-size: 0.85rem;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.admin-user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  min-width: 0;
+}
+
+.admin-user-actions .role-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.admin-user-buttons {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.45rem;
+  align-items: center;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.admin-user-buttons .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .admin-audit-list {
@@ -5528,6 +5636,7 @@ button.composer-shortcut-input {
   margin: 0.2rem 0 0;
   font-size: 0.9rem;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .admin-audit-meta {
@@ -5556,6 +5665,16 @@ button.composer-shortcut-input {
 @media (max-width: 960px) {
   .admin-split {
     grid-template-columns: 1fr;
+  }
+
+  .admin-kpi-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .admin-kpi-board {
+    grid-template-columns: 1fr 1fr;
   }
 }
 

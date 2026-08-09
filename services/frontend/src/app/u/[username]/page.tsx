@@ -18,8 +18,11 @@ import { PostCard } from '@/components/PostCard';
 import { UserAvatar } from '@/components/UserAvatar';
 import { VerifiedTick } from '@/components/AuthorIdentity';
 import { isSiteAdmin } from '@/lib/authorDirectory';
+import { isAdmin, roleLabel, ROLES } from '@/lib/rbac';
 import Link from 'next/link';
 import { ContentPlaceholder, ProfileSkeleton, SpinnerLabel } from '@/components/loaders';
+
+const ALL_ROLES = [ROLES.USER, ROLES.MODERATOR, ROLES.ADMIN];
 
 export default function ProfilePage() {
   const params = useParams<{ username: string }>();
@@ -33,6 +36,8 @@ export default function ProfilePage() {
   const [busy, setBusy] = useState(false);
   const [uploadingDp, setUploadingDp] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [roleBusy, setRoleBusy] = useState(false);
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
@@ -41,6 +46,7 @@ export default function ProfilePage() {
     try {
       const u = await api<User>(`/api/v1/profiles/${params.username}`, {}, token);
       setUser(u);
+      setSelectedRoles(u.roles?.length ? [...u.roles] : [ROLES.USER]);
       if (!u.deleted) {
         const page = await api<Page<Post>>(`/api/v1/posts?authorId=${u.id}&sort=new&size=30`, {}, token);
         setPosts(page.content || []);
@@ -183,6 +189,50 @@ export default function ProfilePage() {
     }
   };
 
+  const toggleProfileRole = (role: string) => {
+    setSelectedRoles((prev) => {
+      const current = new Set(prev.length ? prev : [ROLES.USER]);
+      if (current.has(role)) {
+        if (role === ROLES.USER && current.size === 1) return prev;
+        current.delete(role);
+      } else {
+        current.add(role);
+      }
+      if (role === ROLES.ADMIN || role === ROLES.MODERATOR) {
+        current.add(ROLES.USER);
+      }
+      return Array.from(current);
+    });
+  };
+
+  const setPresetRoles = (tier: 'user' | 'moderator' | 'admin') => {
+    if (tier === 'admin') setSelectedRoles([ROLES.USER, ROLES.ADMIN]);
+    else if (tier === 'moderator') setSelectedRoles([ROLES.USER, ROLES.MODERATOR]);
+    else setSelectedRoles([ROLES.USER]);
+  };
+
+  const saveRoles = async () => {
+    if (!token || !user || user.deleted) return;
+    setRoleBusy(true);
+    try {
+      const updated = await api<User>(
+        `/api/v1/admin/users/${user.id}/roles`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ roles: selectedRoles.length ? selectedRoles : [ROLES.USER] }),
+        },
+        token
+      );
+      setUser((prev) => (prev ? { ...prev, roles: updated.roles } : prev));
+      setSelectedRoles(updated.roles?.length ? [...updated.roles] : [ROLES.USER]);
+      success('Roles saved. They must sign in again for new rights.');
+    } catch (e) {
+      error(friendlyError(e, 'Could not update roles.'));
+    } finally {
+      setRoleBusy(false);
+    }
+  };
+
   if (loading && !user) {
     return <ProfileSkeleton />;
   }
@@ -198,6 +248,7 @@ export default function ProfilePage() {
   const isSelf = me?.id === user.id;
   const admin = !user.deleted && isSiteAdmin(user.roles, user.username);
   const deactivated = Boolean(user.deleted);
+  const canManageRoles = Boolean(me && token && isAdmin(me) && !deactivated);
 
   return (
     <>
@@ -271,8 +322,36 @@ export default function ProfilePage() {
             {!deactivated && user.roles && user.roles.length > 0 && (
               <div className="role-badges" style={{ marginTop: '0.65rem' }}>
                 {user.roles.map((r) => (
-                  <span key={r} className="role-badge">{r.replace(/^ROLE_/, '')}</span>
+                  <span key={r} className="role-badge">{roleLabel(r)}</span>
                 ))}
+              </div>
+            )}
+            {canManageRoles && (
+              <div className="profile-admin-roles">
+                <h3>Admin · change roles</h3>
+                <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
+                  Assign Member, Moderator, or Admin for @{user.username}. Save to apply.
+                </p>
+                <div className="role-presets" style={{ marginTop: '0.55rem' }}>
+                  <button type="button" className="btn secondary btn-sm" onClick={() => setPresetRoles('user')}>Member</button>
+                  <button type="button" className="btn secondary btn-sm" onClick={() => setPresetRoles('moderator')}>Moderator</button>
+                  <button type="button" className="btn secondary btn-sm" onClick={() => setPresetRoles('admin')}>Admin</button>
+                </div>
+                <div className="role-toggles">
+                  {ALL_ROLES.map((role) => (
+                    <label key={role} className="role-check">
+                      <input
+                        type="checkbox"
+                        checked={selectedRoles.includes(role)}
+                        onChange={() => toggleProfileRole(role)}
+                      />
+                      {roleLabel(role)}
+                    </label>
+                  ))}
+                  <button type="button" className="btn" disabled={roleBusy} onClick={saveRoles}>
+                    {roleBusy ? <SpinnerLabel label="Saving…" /> : 'Save roles'}
+                  </button>
+                </div>
               </div>
             )}
             {isSelf && !deactivated && (

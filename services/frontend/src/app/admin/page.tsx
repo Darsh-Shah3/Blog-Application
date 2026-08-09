@@ -10,6 +10,8 @@ import { isAdmin, roleLabel, ROLES } from '@/lib/rbac';
 import { AdminSkeleton, SpinnerLabel } from '@/components/loaders';
 import { AdminPageShell } from '@/components/AdminShell';
 import { TopBar } from '@/components/TopBar';
+import { UserAvatar } from '@/components/UserAvatar';
+import { isSiteAdmin } from '@/lib/authorDirectory';
 import {
   EyeIcon,
   PenIcon,
@@ -17,8 +19,6 @@ import {
   TrashIcon,
   LogInIcon,
 } from '@/components/icons';
-
-const ALL_ROLES = [ROLES.USER, ROLES.MODERATOR, ROLES.ADMIN];
 
 function ActionGlyph({ action }: { action: string }) {
   const a = (action || '').toUpperCase();
@@ -107,31 +107,24 @@ export default function AdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, user?.id]);
 
-  const toggleRole = (userId: string, role: string) => {
-    setSelected((prev) => {
-      const current = new Set(prev[userId] || [ROLES.USER]);
-      if (current.has(role)) {
-        if (role === ROLES.USER && current.size === 1) return prev;
-        current.delete(role);
-      } else {
-        current.add(role);
-      }
-      if (role === ROLES.ADMIN || role === ROLES.MODERATOR) {
-        current.add(ROLES.USER);
-      }
-      return { ...prev, [userId]: Array.from(current) };
-    });
+  const setPresetRoles = (userId: string, tier: 'user' | 'moderator' | 'admin') => {
+    const roles =
+      tier === 'admin' ? [ROLES.USER, ROLES.ADMIN]
+        : tier === 'moderator' ? [ROLES.USER, ROLES.MODERATOR]
+          : [ROLES.USER];
+    setSelected((prev) => ({ ...prev, [userId]: roles }));
   };
 
   const saveRoles = async (userId: string) => {
     if (!token) return;
     setBusyId(userId);
     try {
+      const roles = selected[userId]?.length ? selected[userId] : [ROLES.USER];
       await api<User>(
         `/api/v1/admin/users/${userId}/roles`,
         {
           method: 'PUT',
-          body: JSON.stringify({ roles: selected[userId] || [ROLES.USER] }),
+          body: JSON.stringify({ roles }),
         },
         token
       );
@@ -219,30 +212,30 @@ export default function AdminPage() {
       />
 
       {report && (
-        <section className="admin-kpi-board">
+        <section className="admin-kpi-board" aria-label="Platform snapshot">
           <div className="admin-kpi">
             <span className="admin-kpi-label">Users</span>
-            <strong>{report.activeUsers}</strong>
+            <strong className="admin-kpi-value">{report.activeUsers}</strong>
           </div>
           <div className="admin-kpi">
             <span className="admin-kpi-label">Posts</span>
-            <strong>{report.totalPosts}</strong>
+            <strong className="admin-kpi-value">{report.totalPosts}</strong>
           </div>
           <div className="admin-kpi">
             <span className="admin-kpi-label">Communities</span>
-            <strong>{report.totalCommunities}</strong>
+            <strong className="admin-kpi-value">{report.totalCommunities}</strong>
           </div>
           <div className="admin-kpi">
             <span className="admin-kpi-label">Comments</span>
-            <strong>{report.totalComments}</strong>
+            <strong className="admin-kpi-value">{report.totalComments}</strong>
           </div>
           <div className="admin-kpi">
-            <span className="admin-kpi-label">Audit / 24h</span>
-            <strong>{report.auditEventsLast24h}</strong>
+            <span className="admin-kpi-label">Audit · 24h</span>
+            <strong className="admin-kpi-value">{report.auditEventsLast24h}</strong>
           </div>
           <div className="admin-kpi">
-            <span className="admin-kpi-label">Audit / 7d</span>
-            <strong>{report.auditEventsLast7d}</strong>
+            <span className="admin-kpi-label">Audit · 7d</span>
+            <strong className="admin-kpi-value">{report.auditEventsLast7d}</strong>
           </div>
           <div className="admin-kpi-foot">
             <span className="muted">Snapshot {new Date(report.generatedAt).toLocaleString()}</span>
@@ -257,56 +250,88 @@ export default function AdminPage() {
             <h2>Users & roles</h2>
             <span className="muted">{users.length} loaded</span>
           </header>
+          <p className="muted admin-role-help">
+            Choose a platform role for any user, then save. They must sign in again for the new JWT rights.
+          </p>
           <div className="admin-user-table">
-            {users.map((u) => (
-              <article key={u.id} className="admin-user-card">
-                <div className="admin-user-main">
-                  <div className="admin-user-avatar" aria-hidden>
-                    {(u.displayName || u.username || '?').slice(0, 1).toUpperCase()}
-                  </div>
-                  <div>
-                    <strong>{u.username}</strong>
-                    <p className="muted admin-user-meta">{u.email} · karma {u.karma}</p>
-                    <div className="role-badges">
-                      {(u.roles || []).map((r) => (
-                        <span key={r} className="role-badge">{roleLabel(r)}</span>
-                      ))}
+            {users.map((u) => {
+              const current = selected[u.id] || [ROLES.USER];
+              const tier = current.includes(ROLES.ADMIN)
+                ? 'admin'
+                : current.includes(ROLES.MODERATOR)
+                  ? 'moderator'
+                  : 'user';
+              return (
+                <article key={u.id} className="admin-user-card">
+                  <div className="admin-user-main">
+                    <UserAvatar
+                      username={u.username}
+                      avatarMediaId={u.avatarMediaId}
+                      isAdmin={isSiteAdmin(u.roles, u.username)}
+                      size={40}
+                      className="admin-user-avatar"
+                    />
+                    <div className="admin-user-copy">
+                      <strong className="admin-user-name">{u.username}</strong>
+                      <p className="muted admin-user-meta">
+                        {u.email || '—'} · karma {u.karma ?? 0}
+                      </p>
+                      <div className="role-badges">
+                        {(u.roles || []).map((r) => (
+                          <span key={r} className="role-badge">{roleLabel(r)}</span>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="role-toggles">
-                  {ALL_ROLES.map((role) => (
-                    <label key={role} className="role-check">
-                      <input
-                        type="checkbox"
-                        checked={(selected[u.id] || []).includes(role)}
-                        onChange={() => toggleRole(u.id, role)}
-                      />
-                      {roleLabel(role)}
-                    </label>
-                  ))}
-                  <button
-                    className="btn"
-                    type="button"
-                    disabled={busyId === u.id}
-                    onClick={() => saveRoles(u.id)}
-                  >
-                    {busyId === u.id ? <SpinnerLabel label="Saving…" /> : 'Save'}
-                  </button>
-                  {u.id !== user.id && (
-                    <button
-                      className="btn ghost"
-                      type="button"
-                      disabled={deletingId === u.id}
-                      onClick={() => deleteUser(u)}
-                      title="Soft-delete account"
-                    >
-                      {deletingId === u.id ? <SpinnerLabel label="Deleting…" /> : 'Delete account'}
-                    </button>
-                  )}
-                </div>
-              </article>
-            ))}
+                  <div className="admin-user-actions">
+                    <div className="role-presets" role="group" aria-label={`Role for ${u.username}`}>
+                      <button
+                        type="button"
+                        className={`role-pill${tier === 'user' ? ' is-active' : ''}`}
+                        onClick={() => setPresetRoles(u.id, 'user')}
+                      >
+                        Member
+                      </button>
+                      <button
+                        type="button"
+                        className={`role-pill${tier === 'moderator' ? ' is-active' : ''}`}
+                        onClick={() => setPresetRoles(u.id, 'moderator')}
+                      >
+                        Moderator
+                      </button>
+                      <button
+                        type="button"
+                        className={`role-pill${tier === 'admin' ? ' is-active' : ''}`}
+                        onClick={() => setPresetRoles(u.id, 'admin')}
+                      >
+                        Admin
+                      </button>
+                    </div>
+                    <div className="admin-user-buttons">
+                      <button
+                        className="btn"
+                        type="button"
+                        disabled={busyId === u.id}
+                        onClick={() => saveRoles(u.id)}
+                      >
+                        {busyId === u.id ? <SpinnerLabel label="Saving…" /> : 'Save roles'}
+                      </button>
+                      {u.id !== user.id && (
+                        <button
+                          className="btn ghost"
+                          type="button"
+                          disabled={deletingId === u.id}
+                          onClick={() => deleteUser(u)}
+                          title="Soft-delete account"
+                        >
+                          {deletingId === u.id ? <SpinnerLabel label="Deleting…" /> : 'Delete'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
             {users.length === 0 && <p className="muted">No users found.</p>}
           </div>
         </section>

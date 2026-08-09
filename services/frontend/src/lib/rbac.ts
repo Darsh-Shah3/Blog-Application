@@ -13,7 +13,10 @@ export function hasRole(user: User | null | undefined, role: string): boolean {
 }
 
 export function isAdmin(user: User | null | undefined): boolean {
-  return hasRole(user, ROLES.ADMIN);
+  if (!user) return false;
+  if (hasRole(user, ROLES.ADMIN)) return true;
+  // Bootstrap account username fallback (matches brand / profile checks)
+  return (user.username || '').toLowerCase() === 'admin';
 }
 
 export function isModerator(user: User | null | undefined): boolean {
