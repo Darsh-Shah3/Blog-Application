@@ -16,5 +16,6 @@ public interface AuditService {
             String actorUsername, java.util.UUID actorUserId, String q,
             Instant from, Instant to, Pageable pageable);
 
-    PlatformReportResponse platformReport();
+    /** @param days trend window (1–90), used for per-day / hour-of-day charts */
+    PlatformReportResponse platformReport(int days);
 }

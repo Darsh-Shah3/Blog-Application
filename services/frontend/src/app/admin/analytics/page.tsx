@@ -1,135 +1,43 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { api, friendlyError, getPrometheusUrl, OpsMetrics } from '@/lib/api';
+import { api, friendlyError, PlatformReport } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
 import { isAdmin } from '@/lib/rbac';
 import { AdminSkeleton, SpinnerLabel } from '@/components/loaders';
+import { AdminPageShell } from '@/components/AdminShell';
+import { TopBar } from '@/components/TopBar';
+import {
+  AreaLineChart,
+  CumulativeAreaChart,
+  DonutChart,
+  HBarChart,
+  HourRadialChart,
+  VBarChart,
+} from '@/components/AdminCharts';
 
-const HOURS_OPTIONS = [1, 6, 12, 24] as const;
-const LINE_COLORS = ['#c45c26', '#2f6f4e', '#3d5a80', '#9a4018', '#5b8e7d', '#bc4749', '#6d597a', '#e07a45'];
+const REPORT_DAYS = [7, 14, 30] as const;
 
-function formatValue(unit: string, v: number): string {
-  if (!Number.isFinite(v)) return '—';
-  if (unit === 'bytes') {
-    if (v >= 1e9) return `${(v / 1e9).toFixed(2)} GB`;
-    if (v >= 1e6) return `${(v / 1e6).toFixed(1)} MB`;
-    if (v >= 1e3) return `${(v / 1e3).toFixed(0)} KB`;
-    return `${Math.round(v)} B`;
-  }
-  if (unit === 's') {
-    if (v < 0.001) return `${(v * 1e6).toFixed(0)} µs`;
-    if (v < 1) return `${(v * 1000).toFixed(1)} ms`;
-    return `${v.toFixed(2)} s`;
-  }
-  if (unit === 'req/s') return v < 0.01 ? v.toFixed(4) : v.toFixed(2);
-  return v.toFixed(2);
+function matchesFilter(label: string, q: string) {
+  if (!q.trim()) return true;
+  return label.toLowerCase().includes(q.trim().toLowerCase());
 }
 
-function MetricLineChart({
-  title,
-  unit,
-  lines,
-}: {
-  title: string;
-  unit: string;
-  lines: { label: string; points: { t: number; v: number }[] }[];
-}) {
-  const width = 640;
-  const height = 200;
-  const pad = { l: 44, r: 12, t: 16, b: 28 };
-
-  const { paths, legend, yTicks } = useMemo(() => {
-    const all = lines.flatMap((l) => l.points.map((p) => p.v));
-    const times = lines.flatMap((l) => l.points.map((p) => p.t));
-    const minV = all.length ? Math.min(...all, 0) : 0;
-    const maxV = all.length ? Math.max(...all, minV + 1e-9) : 1;
-    const minT = times.length ? Math.min(...times) : 0;
-    const maxT = times.length ? Math.max(...times) : 1;
-    const innerW = width - pad.l - pad.r;
-    const innerH = height - pad.t - pad.b;
-    const x = (t: number) => pad.l + ((t - minT) / Math.max(maxT - minT, 1)) * innerW;
-    const y = (v: number) => pad.t + innerH - ((v - minV) / Math.max(maxV - minV, 1e-12)) * innerH;
-
-    const built = lines.map((line, i) => {
-      if (!line.points.length) return null;
-      const d = line.points
-        .map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${x(p.t).toFixed(1)} ${y(p.v).toFixed(1)}`)
-        .join(' ');
-      return { d, color: LINE_COLORS[i % LINE_COLORS.length], label: line.label };
-    }).filter(Boolean) as { d: string; color: string; label: string }[];
-
-    const ticks = [0, 0.5, 1].map((f) => {
-      const v = minV + (maxV - minV) * (1 - f);
-      return { y: pad.t + innerH * f, label: formatValue(unit, v) };
-    });
-
-    return { paths: built, legend: built, yTicks: ticks };
-  }, [lines, unit]);
-
-  return (
-    <div className="panel analytics-chart">
-      <h3 style={{ fontFamily: 'var(--font-display)', marginTop: 0, marginBottom: '0.5rem' }}>{title}</h3>
-      {lines.every((l) => !l.points?.length) ? (
-        <p className="muted">No samples in this window. Use the site a bit, then refresh.</p>
-      ) : (
-        <>
-          <svg viewBox={`0 0 ${width} ${height}`} className="metrics-svg" role="img" aria-label={title}>
-            {yTicks.map((t) => (
-              <g key={t.y}>
-                <line x1={pad.l} x2={width - pad.r} y1={t.y} y2={t.y} stroke="var(--line)" strokeWidth={1} />
-                <text x={pad.l - 6} y={t.y + 4} textAnchor="end" fontSize={10} fill="var(--muted)">{t.label}</text>
-              </g>
-            ))}
-            {paths.map((p) => (
-              <path key={p.label} d={p.d} fill="none" stroke={p.color} strokeWidth={2} strokeLinejoin="round" />
-            ))}
-          </svg>
-          <div className="metrics-legend">
-            {legend.map((l) => (
-              <span key={l.label} className="metrics-legend-item">
-                <span className="metrics-swatch" style={{ background: l.color }} />
-                {l.label}
-              </span>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function StatGrid({ title, data, unit }: { title: string; data: Record<string, number>; unit: string }) {
-  const entries = Object.entries(data || {}).sort((a, b) => b[1] - a[1]);
-  return (
-    <div className="panel">
-      <h3 style={{ fontFamily: 'var(--font-display)', marginTop: 0 }}>{title}</h3>
-      {entries.length === 0 ? (
-        <p className="muted" style={{ marginBottom: 0 }}>No data yet.</p>
-      ) : (
-        <div className="report-grid">
-          {entries.map(([k, v]) => (
-            <div key={k}>
-              <strong>{formatValue(unit, v)}</strong>
-              <span className="muted"> {k}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
+/**
+ * Admin platform reports only — audit / catalog data.
+ * Infrastructure Prometheus views live on /admin/infrastructure.
+ */
 export default function AdminAnalyticsPage() {
   const { user, token, loading } = useAuth();
   const router = useRouter();
   const { error, info } = useToast();
-  const [hours, setHours] = useState<(typeof HOURS_OPTIONS)[number]>(6);
-  const [metrics, setMetrics] = useState<OpsMetrics | null>(null);
+  const [reportDays, setReportDays] = useState<(typeof REPORT_DAYS)[number]>(14);
+  const [report, setReport] = useState<PlatformReport | null>(null);
   const [busy, setBusy] = useState(false);
+  const [filterQ, setFilterQ] = useState('');
+  const [appliedFilter, setAppliedFilter] = useState('');
 
   useEffect(() => {
     if (loading) return;
@@ -139,92 +47,239 @@ export default function AdminAnalyticsPage() {
     }
   }, [user, loading, router, info]);
 
-  const load = async (h = hours) => {
+  const loadReport = async (d = reportDays) => {
     if (!token || !isAdmin(user)) return;
     setBusy(true);
     try {
-      const m = await api<OpsMetrics>(`/api/v1/reports/ops-metrics?hours=${h}`, {}, token);
-      setMetrics(m);
+      const r = await api<PlatformReport>(`/api/v1/reports/overview?days=${d}`, {}, token);
+      setReport(r);
     } catch (e) {
-      error(friendlyError(e, 'Could not load ops metrics.'));
+      error(friendlyError(e, 'Could not load platform reports.'));
     } finally {
       setBusy(false);
     }
   };
 
   useEffect(() => {
-    if (token && isAdmin(user)) load(hours);
+    if (token && isAdmin(user)) loadReport(reportDays);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, user?.id, hours]);
+  }, [token, user?.id, reportDays]);
+
+  const filtered = useMemo(() => {
+    const q = appliedFilter;
+    const dayBars = (report?.auditEventsPerDay || []).map((d) => ({
+      label: d.day.slice(5),
+      value: d.count,
+    }));
+    const dayPoints = (report?.auditEventsPerDay || []).map((d) => ({
+      label: d.day,
+      value: d.count,
+    }));
+    const actionBars = Object.entries(report?.actionsLast7d || {})
+      .map(([label, value]) => ({ label, value }))
+      .filter((i) => matchesFilter(i.label, q))
+      .sort((a, b) => b.value - a.value);
+    const serviceBars = Object.entries(report?.servicesLast7d || {})
+      .map(([label, value]) => ({ label, value }))
+      .filter((i) => matchesFilter(i.label, q))
+      .sort((a, b) => b.value - a.value);
+    const resourceBars = Object.entries(report?.resourceTypesLast7d || {})
+      .map(([label, value]) => ({ label, value }))
+      .filter((i) => matchesFilter(i.label, q))
+      .sort((a, b) => b.value - a.value);
+    const actorBars = (report?.topActorsLast7d || [])
+      .map((a) => ({ label: a.name, value: a.count }))
+      .filter((i) => matchesFilter(i.label, q));
+    const resourceActionBars = (report?.resourceActionsLast7d || [])
+      .map((r) => ({
+        label: `${r.resourceType} · ${r.action}`,
+        value: r.count,
+      }))
+      .filter((i) => matchesFilter(i.label, q))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 14);
+    const hoursRaw = report?.activityByHourUtc || [];
+    const hours: { hour: number; count: number }[] = Array.from({ length: 24 }, (_, hour) => {
+      const found = hoursRaw.find((h) => h.hour === hour);
+      return { hour, count: found?.count ?? 0 };
+    });
+    const hourColumns = hours.map((h) => ({
+      label: String(h.hour).padStart(2, '0'),
+      value: h.count,
+    }));
+
+    return {
+      dayBars,
+      dayPoints,
+      actionBars,
+      serviceBars,
+      resourceBars,
+      actorBars,
+      resourceActionBars,
+      hours,
+      hourColumns,
+    };
+  }, [report, appliedFilter]);
 
   if (loading || !user || !isAdmin(user)) {
     return <AdminSkeleton />;
   }
 
   return (
-    <div style={{ marginTop: '1.25rem' }} className="stack">
-      <section className="hero" style={{ paddingTop: '1.5rem' }}>
-        <h1>Analytics</h1>
-        <p>
-          Live service health from Prometheus — the same numbers Grafana uses, shown here so you never leave Threadly.
-          Deep dashboards stay available at Grafana for ops.
-        </p>
-      </section>
-
-      <div className="toolbar">
-        <Link className="btn secondary" href="/admin">← Admin home</Link>
-        {HOURS_OPTIONS.map((h) => (
-          <button
-            key={h}
-            type="button"
-            className={`chip ${hours === h ? 'active' : ''}`}
-            onClick={() => setHours(h)}
-          >
-            {h}h
-          </button>
-        ))}
-        <button type="button" className="btn secondary" disabled={busy} onClick={() => load(hours)}>
+    <AdminPageShell
+      kicker="Platform reports"
+      title="Reports & analytics"
+      blurb="Audit trail and catalog counts only. Live service metrics live under Infra."
+      trailing={(
+        <button type="button" className="btn secondary" disabled={busy} onClick={() => loadReport(reportDays)}>
           {busy ? <SpinnerLabel label="Refreshing…" /> : 'Refresh'}
         </button>
-      </div>
-
-      {metrics && !metrics.prometheusAvailable && (
-        <div className="panel" style={{ borderColor: 'var(--error-line)' }}>
-          <p style={{ margin: 0 }}>
-            Prometheus looks offline. Confirm the <code>prometheus</code> container is up, open{' '}
-            <a href={`${getPrometheusUrl()}/targets`} target="_blank" rel="noreferrer">scrape targets</a>
-            {' '}(jobs should be UP), and that audit-service can reach <code>http://prometheus:9090</code>.
-          </p>
-        </div>
       )}
-
-      {metrics && metrics.prometheusAvailable && (
-        <p className="muted" style={{ margin: '0 0 0.5rem' }}>
-          Graphs use live Prometheus HTTP metrics. Empty 5xx is normal when services are healthy.
-          Latency is average duration (sum/count) — Spring Boot does not export histogram buckets by default.
-          Request-rate numbers include scrape/health traffic in quiet local stacks so you still see activity.
-        </p>
-      )}
-
-      {metrics && (
-        <>
-          <p className="muted" style={{ margin: 0 }}>
-            Snapshot {new Date(metrics.generatedAt).toLocaleString()} · window {hours}h
-          </p>
-          <div className="analytics-grid">
-            <StatGrid title="Request rate (req/s)" data={metrics.requestRateByService} unit="req/s" />
-            <StatGrid title="Avg latency" data={metrics.p95LatencySecondsByService} unit="s" />
-            <StatGrid title="5xx rate (req/s)" data={metrics.error5xxRateByService} unit="req/s" />
-            <StatGrid title="JVM heap used" data={metrics.heapUsedBytesByService} unit="bytes" />
-          </div>
-          <div className="analytics-charts">
-            {(metrics.charts || []).map((c) => (
-              <MetricLineChart key={c.id} title={c.title} unit={c.unit} lines={c.lines || []} />
+    >
+      <TopBar
+        crumb="Reports"
+        searchPlaceholder="Filter charts by action, service, actor…"
+        defaultSearch={filterQ}
+        onSearch={(value) => {
+          setFilterQ(value);
+          setAppliedFilter(value);
+        }}
+        filters={(
+          <>
+            {REPORT_DAYS.map((d) => (
+              <button
+                key={d}
+                type="button"
+                className={`chip ${reportDays === d ? 'active' : ''}`}
+                onClick={() => setReportDays(d)}
+              >
+                {d}d
+              </button>
             ))}
-          </div>
+            {appliedFilter && (
+              <button
+                type="button"
+                className="chip"
+                onClick={() => {
+                  setFilterQ('');
+                  setAppliedFilter('');
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </>
+        )}
+      />
+
+      {report && (
+        <>
+          <section className="panel report-section">
+            <header className="report-section-head">
+              <h2>Catalog overview</h2>
+              <p className="muted">Live totals from auth, community, post, and comment services.</p>
+            </header>
+            <div className="report-grid report-kpi">
+              <div><strong>{report.activeUsers}</strong><span className="muted"> users</span></div>
+              <div><strong>{report.totalPosts}</strong><span className="muted"> posts</span></div>
+              <div><strong>{report.totalCommunities}</strong><span className="muted"> communities</span></div>
+              <div><strong>{report.totalComments}</strong><span className="muted"> comments</span></div>
+              <div><strong>{report.totalAuditEvents}</strong><span className="muted"> audit total</span></div>
+              <div><strong>{report.auditEventsLast24h}</strong><span className="muted"> audit / 24h</span></div>
+              <div><strong>{report.auditEventsLast7d}</strong><span className="muted"> audit / 7d</span></div>
+            </div>
+          </section>
+
+          <section className="report-section">
+            <header className="report-section-head">
+              <h2>Activity over time</h2>
+              <p className="muted">
+                Multi-view trends for the last {report.reportDays || reportDays} days (audit volume).
+              </p>
+            </header>
+            <div className="analytics-charts analytics-charts-dense">
+              <VBarChart
+                title="Events per day"
+                blurb="Multi-color column view — one bar per UTC calendar day."
+                items={filtered.dayBars}
+                fullWidth
+              />
+              <AreaLineChart
+                title="Daily volume (line)"
+                blurb="Same series as a continuous line for growth shape."
+                points={filtered.dayPoints}
+              />
+              <CumulativeAreaChart
+                title="Cumulative audit total"
+                blurb="Running sum across the selected window."
+                days={report.auditEventsPerDay || []}
+              />
+            </div>
+          </section>
+
+          <section className="report-section">
+            <header className="report-section-head">
+              <h2>Activity by hour</h2>
+              <p className="muted">
+                Hour-of-day pattern (UTC) as a clock and full-height columns — not a flat zero list.
+              </p>
+            </header>
+            <div className="analytics-charts">
+              <HourRadialChart
+                title="Peak hours (radial)"
+                blurb="Longer wedges = busier UTC hours across the trend window."
+                hours={filtered.hours}
+              />
+              <VBarChart
+                title="Hour columns (UTC)"
+                blurb="All 24 hours side by side — empty hours stay short."
+                items={filtered.hourColumns}
+              />
+            </div>
+          </section>
+
+          <section className="report-section">
+            <header className="report-section-head">
+              <h2>Mutation breakdown (7d)</h2>
+              <p className="muted">Who changed what — from service-published audit events.</p>
+            </header>
+            <div className="analytics-charts analytics-charts-dense">
+              <DonutChart
+                title="Actions mix"
+                blurb="CREATE / UPDATE / DELETE share of audited mutations."
+                items={filtered.actionBars}
+              />
+              <DonutChart
+                title="Service mix"
+                blurb="Which microservice wrote the most audit events."
+                items={filtered.serviceBars}
+              />
+              <HBarChart
+                title="Actions (ranking)"
+                blurb="Horizontal ranking by count."
+                items={filtered.actionBars}
+              />
+              <HBarChart
+                title="By service"
+                blurb="Microservice writers."
+                items={filtered.serviceBars}
+              />
+              <VBarChart title="Resource types" blurb="POST, COMMUNITY, COMMENT, …" items={filtered.resourceBars} />
+              <HBarChart
+                title="Resource × action"
+                blurb="Top combinations in the last 7 days."
+                items={filtered.resourceActionBars}
+              />
+              <HBarChart
+                title="Top actors"
+                blurb="Most active usernames in the audit trail."
+                items={filtered.actorBars}
+              />
+            </div>
+          </section>
         </>
       )}
-      {!metrics && busy && <AdminSkeleton />}
-    </div>
+      {!report && busy && <AdminSkeleton />}
+    </AdminPageShell>
   );
 }

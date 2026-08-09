@@ -258,3 +258,48 @@ export function MoonIcon(p: IconProps) {
     </Icon>
   );
 }
+
+export function EyeIcon(p: IconProps) {
+  return (
+    <Icon {...p}>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </Icon>
+  );
+}
+
+export function PlusIcon(p: IconProps) {
+  return (
+    <Icon {...p}>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </Icon>
+  );
+}
+
+export function MessageCircleIcon(p: IconProps) {
+  return (
+    <Icon {...p}>
+      <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z" />
+    </Icon>
+  );
+}
+
+export function FilterIcon(p: IconProps) {
+  return (
+    <Icon {...p}>
+      <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
+    </Icon>
+  );
+}
+
+export function ServerIcon(p: IconProps) {
+  return (
+    <Icon {...p}>
+      <rect x="3" y="4" width="18" height="6" rx="1" />
+      <rect x="3" y="14" width="18" height="6" rx="1" />
+      <path d="M7 7h.01" />
+      <path d="M7 17h.01" />
+    </Icon>
+  );
+}

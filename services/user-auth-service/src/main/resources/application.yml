@@ -63,6 +63,10 @@ app:
     from: ${MAIL_FROM:noreply@threadly.local}
     frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
     reset-token-minutes: ${MAIL_RESET_TOKEN_MINUTES:30}
+  oauth:
+    redirect-base-url: ${OAUTH_REDIRECT_BASE_URL:${FRONTEND_BASE_URL:http://localhost:3000}}
+    google:
+      client-id: ${OAUTH_GOOGLE_CLIENT_ID:}
 
 springdoc:
   api-docs:

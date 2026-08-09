@@ -13,6 +13,7 @@ import {
   LogInIcon,
   LogOutIcon,
   MenuIcon,
+  MessageCircleIcon,
   MessageIcon,
   MoonIcon,
   ShieldIcon,
@@ -153,6 +154,12 @@ export function Sidebar() {
 
   if (user) {
     mainNav.push({
+      href: '/messages',
+      label: 'Messages',
+      icon: <MessageCircleIcon size={18} />,
+      match: (p) => p.startsWith('/messages'),
+    });
+    mainNav.push({
       href: '/notifications',
       label: 'Alerts',
       icon: <MessageIcon size={18} />,
@@ -161,20 +168,32 @@ export function Sidebar() {
     });
   }
 
-  if (user && isAdmin(user)) {
-    mainNav.push({
-      href: '/admin',
-      label: 'Admin',
-      icon: <ShieldIcon size={18} />,
-      match: (p) => p.startsWith('/admin') && !p.startsWith('/admin/analytics'),
-    });
-    mainNav.push({
-      href: '/admin/analytics',
-      label: 'Analytics',
-      icon: <ChartGlyph />,
-      match: (p) => p.startsWith('/admin/analytics'),
-    });
-  }
+  const adminNav: NavItem[] = user && isAdmin(user)
+    ? [
+        {
+          href: '/admin',
+          label: 'Admin',
+          icon: <ShieldIcon size={18} />,
+          match: (p) =>
+            p === '/admin'
+            || (p.startsWith('/admin')
+              && !p.startsWith('/admin/analytics')
+              && !p.startsWith('/admin/infrastructure')),
+        },
+        {
+          href: '/admin/analytics',
+          label: 'Reports',
+          icon: <ChartGlyph />,
+          match: (p) => p.startsWith('/admin/analytics'),
+        },
+        {
+          href: '/admin/infrastructure',
+          label: 'Infra',
+          icon: <InfraGlyph />,
+          match: (p) => p.startsWith('/admin/infrastructure'),
+        },
+      ]
+    : [];
 
   const isActive = (item: NavItem) => (item.match ? item.match(pathname) : pathname === item.href);
   const railCollapsed = collapsed && !mobileOpen;
@@ -292,6 +311,28 @@ export function Sidebar() {
               </li>
             ))}
           </ul>
+          {adminNav.length > 0 && (
+            <>
+              <p className="nav-section-label admin-label">Admin</p>
+              <ul className="nav-list admin-nav">
+                {adminNav.map((item) => (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      className={`nav-link ${isActive(item) ? 'active' : ''}`}
+                      title={item.label}
+                      onClick={() => {
+                        if (railCollapsed) expandSidebar();
+                      }}
+                    >
+                      <span className="nav-icon">{item.icon}</span>
+                      <span className="nav-label">{item.label}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </nav>
 
         <div className="sidebar-footer">
@@ -467,6 +508,28 @@ function ChartGlyph() {
       <path d="M7 14v4" />
       <path d="M12 9v9" />
       <path d="M17 5v13" />
+    </svg>
+  );
+}
+
+function InfraGlyph() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={18}
+      height={18}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="2" y="3" width="20" height="6" rx="1" />
+      <rect x="2" y="15" width="20" height="6" rx="1" />
+      <path d="M6 6h.01" />
+      <path d="M6 18h.01" />
     </svg>
   );
 }

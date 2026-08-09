@@ -1,6 +1,7 @@
-'use client';
+﻿'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { api, Community, friendlyError, Page, getApiUrl } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -38,6 +39,7 @@ export function CreatePostModal({
   const { token, user } = useAuth();
   const router = useRouter();
   const { success, error } = useToast();
+  const [mounted, setMounted] = useState(false);
   const [communities, setCommunities] = useState<Community[]>([]);
   const [communityId, setCommunityId] = useState(defaultCommunityId || '');
   const [title, setTitle] = useState('');
@@ -54,6 +56,10 @@ export function CreatePostModal({
   const minSchedule = useMemo(() => {
     const d = new Date(Date.now() + 2 * 60 * 1000);
     return localDatetimeValue(d);
+  }, []);
+
+  useEffect(() => {
+    setMounted(true);
   }, []);
 
   useEffect(() => {
@@ -78,7 +84,7 @@ export function CreatePostModal({
       .catch((e) => error(friendlyError(e, 'Could not load communities.')));
   }, [open, token, error]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
   const onUpload = async (file: File | null) => {
     if (!file || !token) return;
@@ -193,25 +199,33 @@ export function CreatePostModal({
     }
   };
 
-  if (!user) {
-    return (
-      <div className="post-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
-        <div className="post-modal-card panel" onClick={(e) => e.stopPropagation()}>
-          <h2 style={{ fontFamily: 'var(--font-display)', marginTop: 0 }}>Sign in to post</h2>
-          <p className="muted">Create posts after you log in.</p>
-          <div className="toolbar">
-            <a className="btn" href="/login">Log in</a>
-            <button type="button" className="btn ghost" onClick={onClose}>Close</button>
-          </div>
+  const gate = (
+    <div className="post-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="post-modal-card panel" onClick={(e) => e.stopPropagation()}>
+        <h2 style={{ fontFamily: 'var(--font-display)', marginTop: 0 }}>Sign in to post</h2>
+        <p className="muted">Create posts after you log in.</p>
+        <div className="toolbar">
+          <a className="btn" href="/login">Log in</a>
+          <button type="button" className="btn ghost" onClick={onClose}>Close</button>
         </div>
       </div>
-    );
+    </div>
+  );
+
+  if (!user) {
+    return createPortal(gate, document.body);
   }
 
   const initial = (user.displayName || user.username || '?').slice(0, 1).toUpperCase();
 
-  return (
-    <div className="post-modal-overlay" role="dialog" aria-modal="true" aria-label="Create post" onClick={onClose}>
+  const dialog = (
+    <div
+      className="post-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Create post"
+      onClick={onClose}
+    >
       <div className="post-modal-card composer-card" onClick={(e) => e.stopPropagation()}>
         <header className="composer-header">
           <div className="composer-author">
@@ -233,10 +247,15 @@ export function CreatePostModal({
               </label>
             </div>
           </div>
-          <button type="button" className="composer-close" aria-label="Close" onClick={onClose}>×</button>
+          <div className="composer-header-aside">
+            <span className="muted composer-esc-hint">Esc to close</span>
+            <button type="button" className="composer-close" aria-label="Close" onClick={onClose}>
+              ×
+            </button>
+          </div>
         </header>
 
-        <form onSubmit={onSubmit}>
+        <form onSubmit={onSubmit} className="composer-form">
           <div className="composer-body">
             <input
               className="composer-title"
@@ -252,14 +271,14 @@ export function CreatePostModal({
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="What do you want to talk about?"
-              rows={5}
+              rows={6}
             />
             {postType === 'LINK' && (
               <input
                 className="composer-link"
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
-                placeholder="https:// — paste link(s)"
+                placeholder="https:// - paste link(s)"
                 required
               />
             )}
@@ -268,7 +287,7 @@ export function CreatePostModal({
               value={notificationSummary}
               onChange={(e) => setNotificationSummary(e.target.value)}
               maxLength={500}
-              placeholder="Optional blurb for followers’ alerts"
+              placeholder="Optional blurb for followers alerts"
             />
             {mediaList.length > 0 && (
               <ul className="composer-media-list">
@@ -292,9 +311,19 @@ export function CreatePostModal({
                 <div className="composer-schedule-head">
                   <ClockIcon size={18} />
                   <strong>Schedule post</strong>
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    onClick={() => {
+                      setScheduleOpen(false);
+                      setScheduleLocal('');
+                    }}
+                  >
+                    Clear
+                  </button>
                 </div>
                 <label className="composer-schedule-fields">
-                  Date & time
+                  Date and time
                   <input
                     type="datetime-local"
                     min={minSchedule}
@@ -341,10 +370,13 @@ export function CreatePostModal({
               </span>
             </div>
             <div className="composer-actions">
-              {uploading && <SpinnerLabel label="Uploading…" />}
+              <button type="button" className="btn ghost" onClick={onClose}>
+                Cancel
+              </button>
+              {uploading && <SpinnerLabel label="Uploading..." />}
               <button className="btn" type="submit" disabled={!canPublish}>
                 {publishing
-                  ? <SpinnerLabel label="Working…" />
+                  ? <SpinnerLabel label="Working..." />
                   : scheduleOpen && scheduleLocal
                     ? 'Schedule'
                     : 'Post'}
@@ -355,4 +387,6 @@ export function CreatePostModal({
       </div>
     </div>
   );
+
+  return createPortal(dialog, document.body);
 }

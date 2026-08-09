@@ -41,4 +41,33 @@ public final class AuditQueries {
             "select e.resourceType, e.action, count(e) from AuditEvent e "
                     + "where e.occurredAt >= :from "
                     + "group by e.resourceType, e.action";
+
+    public static final String COUNT_BY_RESOURCE_TYPE_SINCE =
+            "select e.resourceType, count(e) from AuditEvent e "
+                    + "where e.occurredAt >= :from "
+                    + "group by e.resourceType "
+                    + "order by count(e) desc";
+
+    public static final String COUNT_TOP_ACTORS_SINCE =
+            "select e.actorUsername, count(e) from AuditEvent e "
+                    + "where e.occurredAt >= :from "
+                    + "and e.actorUsername is not null and e.actorUsername <> '' "
+                    + "group by e.actorUsername "
+                    + "order by count(e) desc";
+
+    /** Native — daily counts for trend charts (UTC calendar days). */
+    public static final String COUNT_PER_DAY_SINCE_NATIVE =
+            "select to_char(date_trunc('day', occurred_at at time zone 'UTC'), 'YYYY-MM-DD') as d, "
+                    + "count(*) "
+                    + "from audit_events "
+                    + "where occurred_at >= :from "
+                    + "group by 1 order by 1";
+
+    /** Native — hour-of-day activity (UTC) for last window. */
+    public static final String COUNT_PER_HOUR_OF_DAY_SINCE_NATIVE =
+            "select cast(extract(hour from occurred_at at time zone 'UTC') as int) as h, "
+                    + "count(*) "
+                    + "from audit_events "
+                    + "where occurred_at >= :from "
+                    + "group by 1 order by 1";
 }

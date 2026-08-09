@@ -8,6 +8,7 @@ import { useToast } from '@/lib/toast';
 import { PostCard } from '@/components/PostCard';
 import { CommunityChat } from '@/components/CommunityChat';
 import { CreatePostModal } from '@/components/CreatePostModal';
+import { TopBar } from '@/components/TopBar';
 import Link from 'next/link';
 import { CommunityDetailSkeleton } from '@/components/loaders';
 
@@ -20,6 +21,7 @@ export default function CommunityPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [q, setQ] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -72,7 +74,7 @@ export default function CommunityPage() {
   }
   if (!community) {
     return (
-      <div className="panel" style={{ marginTop: '1.5rem' }}>
+      <div className="panel page-shell" style={{ marginTop: '1.5rem' }}>
         <h1 style={{ fontFamily: 'var(--font-display)', marginTop: 0 }}>Community not found</h1>
         <p className="muted">This space may not exist, or the link is incomplete.</p>
         <Link href="/communities" className="btn secondary">Browse communities</Link>
@@ -82,43 +84,67 @@ export default function CommunityPage() {
 
   const nextQ = `?next=${encodeURIComponent(`/c/${community.slug}`)}`;
   const creator = community.creatorUsername || 'member';
+  const filteredPosts = q.trim()
+    ? posts.filter((p) => p.title.toLowerCase().includes(q.trim().toLowerCase()))
+    : posts;
 
   return (
-    <>
-      <section className="hero community-hero-detail">
-        <p className="muted" style={{ margin: '0 0 0.35rem', fontSize: '0.9rem' }}>Community</p>
-        <h1>{community.name}</h1>
-        <p>{community.description || 'A place for focused discussion.'}</p>
-        <p className="muted" style={{ marginTop: '0.35rem', fontSize: '0.95rem' }}>
-          {community.memberCount} members
-          {community.joined ? ' · you’re a member' : ''}
-          {' · created by '}
-          <Link href={`/u/${creator}`}>{creator}</Link>
-        </p>
-        <div className="toolbar">
-          <span className="chip active">{community.memberCount} members</span>
-          {user && !community.joined && (
-            <button className="btn" type="button" onClick={join}>Join</button>
-          )}
-          {user && community.joined && (
-            <button className="btn secondary" type="button" onClick={leave}>Leave</button>
-          )}
-          {!user && (
-            <Link className="btn" href={`/login${nextQ}`}>Sign in to join</Link>
-          )}
-          {user && community.joined && (
-            <button className="btn secondary" type="button" onClick={() => setComposeOpen(true)}>
+    <div className="page-shell page-shell-wide community-detail-page">
+      <TopBar
+        crumb={community.name}
+        searchPlaceholder="Filter posts in this space…"
+        defaultSearch={q}
+        onSearch={setQ}
+        actions={
+          user && community.joined ? (
+            <button className="btn" type="button" onClick={() => setComposeOpen(true)}>
               Post here
             </button>
-          )}
-          {user && !community.joined && (
-            <button className="btn ghost" type="button" onClick={join}>Join to post</button>
-          )}
-          {!user && (
-            <Link className="btn secondary" href={`/login${nextQ}`}>Sign in to post</Link>
-          )}
+          ) : user ? (
+            <button className="btn" type="button" onClick={join}>Join</button>
+          ) : (
+            <Link className="btn" href={`/login${nextQ}`}>Log in</Link>
+          )
+        }
+      />
+
+      <Link href="/communities" className="post-detail-back">← Communities</Link>
+
+      <header className="page-header page-header-community">
+        <div className="page-header-row">
+          <div>
+            <p className="page-kicker">Community</p>
+            <h1>{community.name}</h1>
+            <p>{community.description || 'A place for focused discussion.'}</p>
+            <div className="page-meta-row">
+              <span className="page-pill teal">{community.memberCount} members</span>
+              {community.joined && <span className="page-pill coral">You&apos;re a member</span>}
+              <span className="muted" style={{ fontSize: '0.9rem' }}>
+                Created by <Link href={`/u/${creator}`}>{creator}</Link>
+              </span>
+            </div>
+          </div>
+          <div className="page-header-actions">
+            {user && !community.joined && (
+              <button className="btn" type="button" onClick={join}>Join</button>
+            )}
+            {user && community.joined && (
+              <>
+                <button className="btn" type="button" onClick={() => setComposeOpen(true)}>
+                  Post here
+                </button>
+                <button className="btn secondary" type="button" onClick={leave}>Leave</button>
+              </>
+            )}
+            {!user && (
+              <>
+                <Link className="btn" href={`/login${nextQ}`}>Sign in to join</Link>
+                <Link className="btn secondary" href={`/login${nextQ}`}>Sign in to post</Link>
+              </>
+            )}
+          </div>
         </div>
-      </section>
+      </header>
 
       {!user && (
         <div className="panel feed-guest-banner">
@@ -137,10 +163,22 @@ export default function CommunityPage() {
 
       <div className="community-detail-grid">
         <div className="stack">
-          <h2 style={{ fontFamily: 'var(--font-display)', margin: 0, fontSize: '1.25rem' }}>Posts</h2>
-          {posts.map((p) => <PostCard key={p.id} post={p} />)}
-          {posts.length === 0 && (
-            <div className="panel muted">No posts in this community yet. Be the first to share something.</div>
+          <div className="community-posts-head">
+            <h2>Posts</h2>
+            <span className="muted" style={{ fontSize: '0.9rem' }}>
+              {filteredPosts.length} shown
+              {q.trim() ? ` · filtered` : ''}
+            </span>
+          </div>
+          <div className="feed-list">
+            {filteredPosts.map((p) => <PostCard key={p.id} post={p} />)}
+          </div>
+          {filteredPosts.length === 0 && (
+            <div className="panel muted">
+              {q.trim()
+                ? 'No posts match that filter.'
+                : 'No posts in this community yet. Be the first to share something.'}
+            </div>
           )}
         </div>
         <CommunityChat
@@ -159,6 +197,6 @@ export default function CommunityPage() {
           router.push(`/post/${id}`);
         }}
       />
-    </>
+    </div>
   );
 }

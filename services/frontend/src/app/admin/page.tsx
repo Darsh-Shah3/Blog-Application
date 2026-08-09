@@ -1,22 +1,47 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { api, AuditEvent, friendlyError, Page, PlatformReport, RoleInfo, User } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+import { api, AuditEvent, friendlyError, Page, PlatformReport, User } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
 import { isAdmin, roleLabel, ROLES } from '@/lib/rbac';
 import { AdminSkeleton, SpinnerLabel } from '@/components/loaders';
+import { AdminPageShell } from '@/components/AdminShell';
+import { TopBar } from '@/components/TopBar';
+import {
+  EyeIcon,
+  PenIcon,
+  PlusIcon,
+  TrashIcon,
+  LogInIcon,
+} from '@/components/icons';
 
 const ALL_ROLES = [ROLES.USER, ROLES.MODERATOR, ROLES.ADMIN];
+
+function ActionGlyph({ action }: { action: string }) {
+  const a = (action || '').toUpperCase();
+  if (a.includes('DELETE') || a.includes('REMOVE')) {
+    return <span className="audit-action-icon audit-action-delete" title={action}><TrashIcon size={14} /></span>;
+  }
+  if (a.includes('CREATE') || a.includes('JOIN') || a.includes('POST')) {
+    return <span className="audit-action-icon audit-action-create" title={action}><PlusIcon size={14} /></span>;
+  }
+  if (a.includes('UPDATE') || a.includes('EDIT') || a.includes('ROLE')) {
+    return <span className="audit-action-icon audit-action-update" title={action}><PenIcon size={14} /></span>;
+  }
+  if (a.includes('LOGIN') || a.includes('AUTH')) {
+    return <span className="audit-action-icon audit-action-login" title={action}><LogInIcon size={14} /></span>;
+  }
+  return <span className="audit-action-icon audit-action-view" title={action}><EyeIcon size={14} /></span>;
+}
 
 export default function AdminPage() {
   const { user, token, loading } = useAuth();
   const router = useRouter();
   const { success, error, info } = useToast();
   const [users, setUsers] = useState<User[]>([]);
-  const [roles, setRoles] = useState<RoleInfo[]>([]);
   const [q, setQ] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Record<string, string[]>>({});
@@ -31,7 +56,7 @@ export default function AdminPage() {
       info('Admin access required.');
       router.replace('/');
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, info]);
 
   const loadReport = async () => {
     if (!token || !isAdmin(user)) return;
@@ -67,8 +92,6 @@ export default function AdminPage() {
         map[u.id] = u.roles?.length ? [...u.roles] : [ROLES.USER];
       });
       setSelected(map);
-      const catalog = await api<RoleInfo[]>('/api/v1/admin/roles', {}, token);
-      setRoles(catalog || []);
     } catch (e) {
       error(friendlyError(e, 'Could not load admin data.'));
     }
@@ -80,6 +103,7 @@ export default function AdminPage() {
       loadReport();
       loadAudit();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, user?.id]);
 
   const toggleRole = (userId: string, role: string) => {
@@ -119,146 +143,166 @@ export default function AdminPage() {
     }
   };
 
-  const onSearch = (e: FormEvent) => {
-    e.preventDefault();
-    load(q);
-  };
-
   if (loading || !user || !isAdmin(user)) {
     return <AdminSkeleton />;
   }
 
   return (
-    <div style={{ marginTop: '1.25rem' }} className="stack">
-      <section className="hero" style={{ paddingTop: '1.5rem' }}>
-        <h1>Admin</h1>
-        <p>Roles, platform reports, audit trail, and live ops analytics from Prometheus.</p>
-        <div className="toolbar" style={{ marginTop: '0.75rem' }}>
-          <Link className="btn" href="/admin/analytics">Open analytics dashboard</Link>
-        </div>
-      </section>
+    <AdminPageShell
+      kicker="Admin console"
+      title="Control center"
+      blurb="User roles, live snapshot, and audit trail. Reports and Infra live in the sub-nav."
+      trailing={(
+        <button type="button" className="btn secondary" onClick={() => { load(); loadReport(); loadAudit(); }}>
+          Refresh all
+        </button>
+      )}
+    >
+      <TopBar
+        crumb="Admin"
+        searchPlaceholder="Search users or audit summary…"
+        defaultSearch={q}
+        onSearch={(value) => {
+          setQ(value);
+          setAuditQ(value);
+          load(value);
+          loadAudit(value, auditAction);
+        }}
+        filters={(
+          <>
+            <button
+              type="button"
+              className={`chip ${auditAction === '' ? 'active' : ''}`}
+              onClick={() => { setAuditAction(''); loadAudit(auditQ, ''); }}
+            >
+              All
+            </button>
+            {['CREATE', 'UPDATE', 'DELETE', 'LOGIN'].map((a) => (
+              <button
+                key={a}
+                type="button"
+                className={`chip ${auditAction === a ? 'active' : ''}`}
+                onClick={() => { setAuditAction(a); loadAudit(auditQ, a); }}
+              >
+                {a}
+              </button>
+            ))}
+          </>
+        )}
+      />
 
       {report && (
-        <section className="panel">
-          <h2 style={{ fontFamily: 'var(--font-display)', marginTop: 0 }}>Platform report</h2>
-          <div className="report-grid">
-            <div><strong>{report.activeUsers}</strong><span className="muted"> active users</span></div>
-            <div><strong>{report.totalPosts}</strong><span className="muted"> posts</span></div>
-            <div><strong>{report.totalCommunities}</strong><span className="muted"> communities</span></div>
-            <div><strong>{report.totalComments}</strong><span className="muted"> comments</span></div>
-            <div><strong>{report.auditEventsLast24h}</strong><span className="muted"> audit / 24h</span></div>
-            <div><strong>{report.auditEventsLast7d}</strong><span className="muted"> audit / 7d</span></div>
+        <section className="admin-kpi-board">
+          <div className="admin-kpi">
+            <span className="admin-kpi-label">Users</span>
+            <strong>{report.activeUsers}</strong>
           </div>
-          <p className="muted" style={{ marginBottom: 0, fontSize: '0.85rem' }}>
-            Generated {new Date(report.generatedAt).toLocaleString()}
-          </p>
-          <button type="button" className="btn secondary" style={{ marginTop: '0.75rem' }} onClick={loadReport}>
-            Refresh report
-          </button>
-        </section>
-      )}
-
-      <section className="panel">
-        <h2 style={{ fontFamily: 'var(--font-display)', marginTop: 0 }}>Audit events</h2>
-        <form
-          className="form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            loadAudit();
-          }}
-          style={{ marginBottom: '1rem' }}
-        >
-          <input
-            value={auditQ}
-            onChange={(e) => setAuditQ(e.target.value)}
-            placeholder="Search summary / resource id"
-          />
-          <select value={auditAction} onChange={(e) => setAuditAction(e.target.value)}>
-            <option value="">All actions</option>
-            <option value="CREATE">CREATE</option>
-            <option value="UPDATE">UPDATE</option>
-            <option value="DELETE">DELETE</option>
-            <option value="LOGIN">LOGIN</option>
-          </select>
-          <button className="btn secondary" type="submit">Filter</button>
-        </form>
-        <div className="stack" style={{ gap: '0.5rem' }}>
-          {events.map((ev) => (
-            <div key={ev.id} className="muted" style={{ fontSize: '0.9rem' }}>
-              <strong>{ev.action}</strong> {ev.resourceType}/{ev.resourceId || '—'} · {ev.serviceName}
-              {' · '}{ev.actorUsername || '—'} · {new Date(ev.occurredAt).toLocaleString()}
-              {ev.summary ? ` — ${ev.summary}` : ''}
-            </div>
-          ))}
-          {events.length === 0 && <p className="muted">No audit events matched.</p>}
-        </div>
-      </section>
-
-      {roles.length > 0 && (
-        <section className="panel">
-          <h2 style={{ fontFamily: 'var(--font-display)', marginTop: 0 }}>Role catalog</h2>
-          <div className="stack" style={{ gap: '0.65rem' }}>
-            {roles.map((r) => (
-              <div key={r.name}>
-                <strong>{r.displayName}</strong>{' '}
-                <span className="role-badge">{roleLabel(r.name)}</span>
-                <p className="muted" style={{ margin: '0.25rem 0 0' }}>{r.description}</p>
-                <p className="muted" style={{ margin: '0.2rem 0 0', fontSize: '0.85rem' }}>
-                  {r.permissions?.join(' · ')}
-                </p>
-              </div>
-            ))}
+          <div className="admin-kpi">
+            <span className="admin-kpi-label">Posts</span>
+            <strong>{report.totalPosts}</strong>
+          </div>
+          <div className="admin-kpi">
+            <span className="admin-kpi-label">Communities</span>
+            <strong>{report.totalCommunities}</strong>
+          </div>
+          <div className="admin-kpi">
+            <span className="admin-kpi-label">Comments</span>
+            <strong>{report.totalComments}</strong>
+          </div>
+          <div className="admin-kpi">
+            <span className="admin-kpi-label">Audit / 24h</span>
+            <strong>{report.auditEventsLast24h}</strong>
+          </div>
+          <div className="admin-kpi">
+            <span className="admin-kpi-label">Audit / 7d</span>
+            <strong>{report.auditEventsLast7d}</strong>
+          </div>
+          <div className="admin-kpi-foot">
+            <span className="muted">Snapshot {new Date(report.generatedAt).toLocaleString()}</span>
+            <Link className="btn secondary" href="/admin/analytics">Open reports</Link>
           </div>
         </section>
       )}
 
-      <section className="panel">
-        <h2 style={{ fontFamily: 'var(--font-display)', marginTop: 0 }}>Users</h2>
-        <form className="form" onSubmit={onSearch} style={{ marginBottom: '1rem' }}>
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search username, email, display name"
-          />
-          <button className="btn secondary" type="submit">Search</button>
-        </form>
-        <div className="stack">
-          {users.map((u) => (
-            <div key={u.id} className="admin-user-row">
-              <div>
-                <strong>{u.username}</strong>
-                <span className="muted"> · {u.email} · karma {u.karma}</span>
-                <div className="role-badges" style={{ marginTop: '0.35rem' }}>
-                  {(u.roles || []).map((r) => (
-                    <span key={r} className="role-badge">{roleLabel(r)}</span>
-                  ))}
+      <div className="admin-split">
+        <section className="admin-card">
+          <header className="admin-card-head">
+            <h2>Users & roles</h2>
+            <span className="muted">{users.length} loaded</span>
+          </header>
+          <div className="admin-user-table">
+            {users.map((u) => (
+              <article key={u.id} className="admin-user-card">
+                <div className="admin-user-main">
+                  <div className="admin-user-avatar" aria-hidden>
+                    {(u.displayName || u.username || '?').slice(0, 1).toUpperCase()}
+                  </div>
+                  <div>
+                    <strong>{u.username}</strong>
+                    <p className="muted admin-user-meta">{u.email} · karma {u.karma}</p>
+                    <div className="role-badges">
+                      {(u.roles || []).map((r) => (
+                        <span key={r} className="role-badge">{roleLabel(r)}</span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="role-toggles">
-                {ALL_ROLES.map((role) => (
-                  <label key={role} className="role-check">
-                    <input
-                      type="checkbox"
-                      checked={(selected[u.id] || []).includes(role)}
-                      onChange={() => toggleRole(u.id, role)}
-                    />
-                    {roleLabel(role)}
-                  </label>
-                ))}
-                <button
-                  className="btn"
-                  type="button"
-                  disabled={busyId === u.id}
-                  onClick={() => saveRoles(u.id)}
-                >
-                  {busyId === u.id ? <SpinnerLabel label="Saving…" /> : 'Save roles'}
-                </button>
-              </div>
-            </div>
-          ))}
-          {users.length === 0 && <p className="muted">No users found.</p>}
-        </div>
-      </section>
-    </div>
+                <div className="role-toggles">
+                  {ALL_ROLES.map((role) => (
+                    <label key={role} className="role-check">
+                      <input
+                        type="checkbox"
+                        checked={(selected[u.id] || []).includes(role)}
+                        onChange={() => toggleRole(u.id, role)}
+                      />
+                      {roleLabel(role)}
+                    </label>
+                  ))}
+                  <button
+                    className="btn"
+                    type="button"
+                    disabled={busyId === u.id}
+                    onClick={() => saveRoles(u.id)}
+                  >
+                    {busyId === u.id ? <SpinnerLabel label="Saving…" /> : 'Save'}
+                  </button>
+                </div>
+              </article>
+            ))}
+            {users.length === 0 && <p className="muted">No users found.</p>}
+          </div>
+        </section>
+
+        <section className="admin-card">
+          <header className="admin-card-head">
+            <h2>Audit trail</h2>
+            <span className="muted">{events.length} events</span>
+          </header>
+          <ul className="admin-audit-list">
+            {events.map((ev) => (
+              <li key={ev.id} className="admin-audit-row">
+                <ActionGlyph action={ev.action} />
+                <div className="admin-audit-body">
+                  <div className="admin-audit-top">
+                    <span className="admin-audit-resource">
+                      {ev.resourceType}
+                      {ev.resourceId ? ` / ${String(ev.resourceId).slice(0, 12)}` : ''}
+                    </span>
+                    <time className="muted">{new Date(ev.occurredAt).toLocaleString()}</time>
+                  </div>
+                  <p className="admin-audit-summary">
+                    {ev.summary || `${ev.action} via ${ev.serviceName}`}
+                  </p>
+                  <p className="muted admin-audit-meta">
+                    {ev.serviceName} · {ev.actorUsername || 'system'}
+                  </p>
+                </div>
+              </li>
+            ))}
+            {events.length === 0 && <li className="muted">No audit events matched.</li>}
+          </ul>
+        </section>
+      </div>
+    </AdminPageShell>
   );
 }

@@ -6,17 +6,20 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.util.UriBuilder;
 
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Function;
 
 /**
  * Queries Prometheus HTTP API so admin UI can show live service graphs without opening Grafana.
+ * <p>
+ * Important: PromQL uses {@code {}} and {@code []}. Spring's UriBuilder treats braces as URI-template
+ * variables, which silently drops or breaks range queries. Always build absolute encoded URIs.
  */
 @Component
 public class PrometheusClient {
@@ -24,13 +27,16 @@ public class PrometheusClient {
     private static final Logger log = LoggerFactory.getLogger(PrometheusClient.class);
 
     private final WebClient webClient;
+    private final String baseUrl;
     private final boolean enabled;
 
     public PrometheusClient(
             WebClient.Builder builder,
             @Value("${app.prometheus-base-url:http://localhost:9090}") String baseUrl) {
-        this.webClient = builder.baseUrl(baseUrl).build();
-        this.enabled = baseUrl != null && !baseUrl.isBlank();
+        String normalized = baseUrl == null ? "" : baseUrl.replaceAll("/+$", "");
+        this.baseUrl = normalized;
+        this.webClient = builder.baseUrl(normalized).build();
+        this.enabled = !normalized.isBlank();
     }
 
     public boolean isEnabled() {
@@ -43,8 +49,9 @@ public class PrometheusClient {
             return List.of();
         }
         try {
+            URI uri = URI.create(baseUrl + "/api/v1/query?query=" + enc(promQl));
             JsonNode root = webClient.get()
-                    .uri(uriBuilder -> uriBuilder.path("/api/v1/query").queryParam("query", promQl).build())
+                    .uri(uri)
                     .retrieve()
                     .bodyToMono(JsonNode.class)
                     .block(Duration.ofSeconds(5));
@@ -60,16 +67,14 @@ public class PrometheusClient {
             return new SeriesSeries(promQl, List.of());
         }
         try {
-            // Encode via UriBuilder (not build(true) on a pre-built string) so [ ], { }, etc. stay valid.
-            Function<UriBuilder, URI> uriFn = uriBuilder -> uriBuilder
-                    .path("/api/v1/query_range")
-                    .queryParam("query", promQl)
-                    .queryParam("start", start.getEpochSecond())
-                    .queryParam("end", end.getEpochSecond())
-                    .queryParam("step", step)
-                    .build();
+            String url = baseUrl
+                    + "/api/v1/query_range?query=" + enc(promQl)
+                    + "&start=" + start.getEpochSecond()
+                    + "&end=" + end.getEpochSecond()
+                    + "&step=" + enc(step);
+            URI uri = URI.create(url);
             JsonNode root = webClient.get()
-                    .uri(uriFn)
+                    .uri(uri)
                     .retrieve()
                     .bodyToMono(JsonNode.class)
                     .block(Duration.ofSeconds(8));
@@ -78,6 +83,10 @@ public class PrometheusClient {
             log.warn("Prometheus range query failed: {} — {}", promQl, e.getMessage());
             return new SeriesSeries(promQl, List.of());
         }
+    }
+
+    private static String enc(String value) {
+        return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
     }
 
     private List<MetricSample> parseVector(JsonNode root) {

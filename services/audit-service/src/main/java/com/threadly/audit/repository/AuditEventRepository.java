@@ -35,5 +35,17 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, java.uti
     @Query(AuditQueries.COUNT_BY_RESOURCE_AND_ACTION_SINCE)
     List<Object[]> countByResourceAndActionSince(@Param("from") Instant from);
 
+    @Query(AuditQueries.COUNT_BY_RESOURCE_TYPE_SINCE)
+    List<Object[]> countByResourceTypeSince(@Param("from") Instant from);
+
+    @Query(AuditQueries.COUNT_TOP_ACTORS_SINCE)
+    List<Object[]> topActorsSince(@Param("from") Instant from, Pageable pageable);
+
+    @Query(value = AuditQueries.COUNT_PER_DAY_SINCE_NATIVE, nativeQuery = true)
+    List<Object[]> countPerDaySince(@Param("from") Instant from);
+
+    @Query(value = AuditQueries.COUNT_PER_HOUR_OF_DAY_SINCE_NATIVE, nativeQuery = true)
+    List<Object[]> countPerHourOfDaySince(@Param("from") Instant from);
+
     long countByOccurredAtAfter(Instant after);
 }

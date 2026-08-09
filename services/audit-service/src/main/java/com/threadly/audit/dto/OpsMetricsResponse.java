@@ -20,6 +20,12 @@ public class OpsMetricsResponse {
     private Map<String, Double> error5xxRateByService;
     /** JVM heap used bytes by application. */
     private Map<String, Double> heapUsedBytesByService;
+    /** 4xx rate (req/s) by application. */
+    private Map<String, Double> error4xxRateByService;
+    /** process_cpu_usage 0–1 by application. */
+    private Map<String, Double> cpuUsageByService;
+    /** Live JVM threads by application. */
+    private Map<String, Double> threadsByService;
     /** Time-series charts for the admin UI. */
     private List<ChartSeries> charts;
 

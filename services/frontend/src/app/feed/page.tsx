@@ -13,6 +13,8 @@ import {
   PostSkeletonList,
   SpinnerLabel,
 } from '@/components/loaders';
+import { TopBar } from '@/components/TopBar';
+import { CreateIconBtn } from '@/components/ActionIcon';
 
 const SORTS_AUTH = [
   { id: 'for_you', label: 'For you' },
@@ -84,115 +86,137 @@ export default function FeedPage() {
   const sorts = token ? SORTS_AUTH : SORTS_GUEST;
 
   return (
-    <>
-      <section className="hero" style={{ paddingTop: '1.5rem' }}>
-        <h1>Posts</h1>
-        <p>
-          Browse the global feed without signing in. For you ranks communities you joined and people you follow.
-          Create posts, vote, and join communities after you log in.
-        </p>
-      </section>
-
-      {!authLoading && !token && (
-        <div className="panel feed-guest-banner">
-          <div>
-            <strong>Browsing as a guest</strong>
-            <p className="muted" style={{ margin: '0.25rem 0 0' }}>
-              Read full posts and communities. Sign in to create, join, vote, or reply.
-            </p>
-          </div>
-          <div className="toolbar" style={{ margin: 0 }}>
-            <Link className="btn" href="/login">Log in</Link>
-            <Link className="btn secondary" href="/register">Sign up</Link>
-          </div>
-        </div>
-      )}
-
-      {user && (
-        <div className="panel composer-shortcut">
-          <div className="composer-shortcut-avatar" aria-hidden>
-            {(user.displayName || user.username || '?').slice(0, 1).toUpperCase()}
-          </div>
-          <button type="button" className="composer-shortcut-input" onClick={() => setComposeOpen(true)}>
-            Start a post…
-          </button>
-          <button type="button" className="btn" onClick={() => setComposeOpen(true)}>Post</button>
-        </div>
-      )}
-
-      <form
-        className="toolbar"
-        onSubmit={(e) => {
-          e.preventDefault();
-          load(q, sort, 0, false);
-        }}
-      >
-        <input
-          className="input"
-          style={{ minWidth: '12rem', flex: 1 }}
-          placeholder="Search posts by title…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-        <button type="submit" className="btn secondary">Search</button>
-        {sorts.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            className={`chip ${sort === s.id ? 'active' : ''}`}
-            onClick={() => setSort(s.id)}
-          >
-            {s.label}
-          </button>
-        ))}
-      </form>
-
-      {authLoading && <PageSpinner label="Checking session…" />}
-      {loading && !authLoading && <PostSkeletonList count={5} />}
-      {!loading && !authLoading && posts.length === 0 && (
-        <ContentPlaceholder
-          title="No posts yet"
-          description={
-            token
-              ? 'Join communities, follow people, or switch to Hot / Trending for global posts.'
-              : 'Demo posts appear once services seed the database — refresh after backends start, or switch sorts.'
-          }
-          action={(
-            <>
-              <Link className="btn" href="/communities">Discover communities</Link>
-              {token ? (
-                <button type="button" className="btn secondary" onClick={() => setComposeOpen(true)}>New post</button>
+    <div className="page-shell page-shell-wide feed-page">
+      <div className="feed-layout">
+        <div className="feed-main stack">
+          <TopBar
+            crumb="Posts"
+            searchPlaceholder="Search posts by title…"
+            defaultSearch={q}
+            onSearch={(value) => {
+              setQ(value);
+              load(value, sort, 0, false);
+            }}
+            filters={(
+              <>
+                {sorts.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={`chip ${sort === s.id ? 'active' : ''}`}
+                    onClick={() => setSort(s.id)}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </>
+            )}
+            actions={
+              user ? (
+                <CreateIconBtn label="New post" onClick={() => setComposeOpen(true)} />
               ) : (
-                <Link className="btn secondary" href="/register">Sign up to post</Link>
+                <Link className="btn secondary" href="/login">Log in</Link>
+              )
+            }
+          />
+
+          <header className="page-header page-header-compact">
+            <div className="page-header-row">
+              <div>
+                <p className="page-kicker">Feed</p>
+                <h1>Posts</h1>
+                <p>
+                  Hot and rising stories across every space. Use the header to search and sort —
+                  open the + control to publish.
+                </p>
+              </div>
+              {user && (
+                <button type="button" className="btn" onClick={() => setComposeOpen(true)}>
+                  New post
+                </button>
               )}
-            </>
+            </div>
+          </header>
+
+          {!authLoading && !token && (
+            <div className="panel feed-guest-banner">
+              <div>
+                <strong>Browsing as a guest</strong>
+                <p className="muted" style={{ margin: '0.25rem 0 0' }}>
+                  Read full posts and communities. Sign in to create, join, vote, or reply.
+                </p>
+              </div>
+              <div className="toolbar" style={{ margin: 0 }}>
+                <Link className="btn" href="/login">Log in</Link>
+                <Link className="btn secondary" href="/register">Sign up</Link>
+              </div>
+            </div>
           )}
-        />
-      )}
-      {!loading && (
-        <div className="stack">
-          {posts.map((p) => (
-            <PostCard key={p.id} post={p} />
-          ))}
+
+          {authLoading && <PageSpinner label="Checking session…" />}
+          {loading && !authLoading && <PostSkeletonList count={5} />}
+          {!loading && !authLoading && posts.length === 0 && (
+            <ContentPlaceholder
+              title="No posts yet"
+              description={
+                token
+                  ? 'Join communities, follow people, or switch to Hot / Trending for global posts.'
+                  : 'Demo posts appear once services seed the database — refresh after backends start, or switch sorts.'
+              }
+              action={(
+                <>
+                  <Link className="btn" href="/communities">Discover communities</Link>
+                  {token ? (
+                    <button type="button" className="btn secondary" onClick={() => setComposeOpen(true)}>New post</button>
+                  ) : (
+                    <Link className="btn secondary" href="/register">Sign up to post</Link>
+                  )}
+                </>
+              )}
+            />
+          )}
+          {!loading && (
+            <div className="feed-list">
+              {posts.map((p) => (
+                <PostCard key={p.id} post={p} />
+              ))}
+            </div>
+          )}
+          {hasMore && (
+            <div className="feed-load-more">
+              <button
+                type="button"
+                className="btn secondary"
+                disabled={loadingMore}
+                onClick={() => load(q, sort, page + 1, true)}
+              >
+                {loadingMore ? <SpinnerLabel label="Loading more…" /> : 'Load more posts'}
+              </button>
+            </div>
+          )}
+          {loadingMore && posts.length > 0 && <PostSkeletonList count={2} />}
         </div>
-      )}
-      {hasMore && (
-        <div style={{ display: 'flex', justifyContent: 'center', margin: '1.5rem 0' }}>
-          <button
-            type="button"
-            className="btn secondary"
-            disabled={loadingMore}
-            onClick={() => load(q, sort, page + 1, true)}
-          >
-            {loadingMore ? <SpinnerLabel label="Loading more…" /> : 'Load more posts'}
-          </button>
-        </div>
-      )}
-      {loadingMore && posts.length > 0 && (
-        <div style={{ marginTop: '0.75rem' }}>
-          <PostSkeletonList count={2} />
-        </div>
-      )}
+
+        <aside className="feed-rail">
+          <div className="panel feed-rail-card">
+            <h2>How ranking works</h2>
+            <ul className="feed-rail-list">
+              <li><strong>Hot</strong> — score + recency blend</li>
+              <li><strong>Trending</strong> — rising engagement</li>
+              <li><strong>New</strong> — latest first</li>
+              <li><strong>Top</strong> — all-time votes</li>
+              {token && <li><strong>For you</strong> — joined spaces & follows</li>}
+            </ul>
+          </div>
+          <div className="panel feed-rail-card">
+            <h2>Spaces</h2>
+            <p className="muted" style={{ marginTop: 0 }}>
+              Join communities so For you and chat stay useful.
+            </p>
+            <Link className="btn secondary" href="/communities">Browse communities</Link>
+          </div>
+        </aside>
+      </div>
 
       <CreatePostModal
         open={composeOpen}
@@ -202,6 +226,6 @@ export default function FeedPage() {
           load(q, sort, 0, false);
         }}
       />
-    </>
+    </div>
   );
 }

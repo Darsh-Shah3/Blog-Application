@@ -20,7 +20,8 @@ import java.util.List;
 /**
  * STOMP over WebSocket for community chat rooms.
  * Clients connect to {@code /ws/community-chat}, subscribe to
- * {@code /topic/community.{id}}, and send via {@code /app/chat/{communityId}}.
+ * {@code /topic/community.{id}} or {@code /topic/dm.{threadId}}, and send via
+ * {@code /app/chat/{communityId}} or {@code /app/dm/{threadId}}.
  */
 @Configuration
 @EnableWebSocketMessageBroker

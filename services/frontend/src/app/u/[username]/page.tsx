@@ -95,6 +95,16 @@ export default function ProfilePage() {
             <button type="button" className="btn" disabled={busy} onClick={toggleFollow}>
               {busy ? <SpinnerLabel label="Updating…" /> : follow?.following ? 'Unfollow' : 'Follow'}
             </button>
+            <Link className="btn secondary" href={`/messages?with=${encodeURIComponent(user.username)}`}>
+              Message
+            </Link>
+          </div>
+        )}
+        {!isSelf && !me && (
+          <div className="toolbar" style={{ marginTop: '0.85rem' }}>
+            <Link className="btn" href={`/login?next=${encodeURIComponent(`/u/${user.username}`)}`}>
+              Log in to message
+            </Link>
           </div>
         )}
       </section>

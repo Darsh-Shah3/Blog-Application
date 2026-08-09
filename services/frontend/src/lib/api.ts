@@ -128,11 +128,16 @@ export type PlatformReport = {
   auditEventsLast7d: number;
   actionsLast7d: Record<string, number>;
   servicesLast7d: Record<string, number>;
+  resourceTypesLast7d?: Record<string, number>;
   resourceActionsLast7d: { resourceType: string; action: string; count: number }[];
+  topActorsLast7d?: { name: string; count: number }[];
+  auditEventsPerDay?: { day: string; count: number }[];
+  activityByHourUtc?: { hour: number; count: number }[];
   activeUsers: number;
   totalPosts: number;
   totalCommunities: number;
   totalComments: number;
+  reportDays?: number;
   generatedAt: string;
 };
 
@@ -185,6 +190,9 @@ export type OpsMetrics = {
   p95LatencySecondsByService: Record<string, number>;
   error5xxRateByService: Record<string, number>;
   heapUsedBytesByService: Record<string, number>;
+  error4xxRateByService?: Record<string, number>;
+  cpuUsageByService?: Record<string, number>;
+  threadsByService?: Record<string, number>;
   charts: {
     id: string;
     title: string;

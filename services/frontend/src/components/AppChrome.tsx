@@ -12,6 +12,7 @@ const BARE_PREFIXES = [
   '/register',
   '/forgot-password',
   '/reset-password',
+  '/oauth',
 ];
 
 function isBareRoute(pathname: string) {

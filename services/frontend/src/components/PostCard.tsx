@@ -7,6 +7,8 @@ import { api, friendlyError, Post, mediaContentUrl } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
 import { canDeleteContent } from '@/lib/rbac';
+import { DeleteIconBtn, ViewIconLink } from '@/components/ActionIcon';
+import { MessageCircleIcon } from '@/components/icons';
 
 export function PostCard({
   post,
@@ -130,11 +132,11 @@ export function PostCard({
           {' · '}
           {new Date(post.createdAt).toLocaleString()}
         </div>
-        <h2 className="post-title">
-          {expandedBody ? post.title : (
+        {!expandedBody && (
+          <h2 className="post-title">
             <Link href={`/post/${post.id}`} onClick={stop}>{post.title}</Link>
-          )}
-        </h2>
+          </h2>
+        )}
         {post.linkUrls && post.linkUrls.length > 0 && (
           <p className="post-excerpt">
             {post.linkUrls.slice(0, 2).map((u) => (
@@ -167,9 +169,13 @@ export function PostCard({
           </p>
         )}
         <div className="post-meta post-actions" onClick={stop}>
-          <Link href={`/post/${post.id}`}>{post.commentCount} comments</Link>
+          <Link href={`/post/${post.id}`} className="post-action-comments">
+            <MessageCircleIcon size={15} />
+            <span>{post.commentCount}</span>
+          </Link>
+          <ViewIconLink href={`/post/${post.id}`} label="View post" onClick={stop} />
           {canDeleteContent(user, post.authorId) && (
-            <button className="btn ghost" type="button" onClick={remove}>Delete</button>
+            <DeleteIconBtn label="Delete post" onClick={remove} />
           )}
         </div>
       </div>

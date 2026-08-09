@@ -9,6 +9,7 @@ import { useToast } from '@/lib/toast';
 import { SpinnerLabel } from '@/components/loaders';
 import { useTheme } from '@/lib/theme';
 import { MoonIcon, SunIcon } from '@/components/icons';
+import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -52,26 +53,32 @@ export default function RegisterPage() {
         </Link>
         <h1>Join Threadly</h1>
         <p className="muted auth-lead">Create an account to post, vote, and follow people.</p>
+
         <form className="form" onSubmit={onSubmit}>
           <label>
             Username
-            <input value={username} onChange={(e) => setUsername(e.target.value)} minLength={3} required />
+            <input value={username} onChange={(e) => setUsername(e.target.value)} minLength={3} required autoComplete="username" />
           </label>
           <label>
             Email
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
           </label>
           <label>
             Password
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} required />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} required autoComplete="new-password" />
           </label>
           <button className="btn" type="submit" disabled={busy}>
             {busy ? <SpinnerLabel label="Creating…" /> : 'Sign up'}
           </button>
         </form>
-        <p className="muted" style={{ marginBottom: 0 }}>
-          Already have an account? <Link href="/login">Log in</Link>
-        </p>
+
+        <SocialAuthButtons mode="signup" />
+
+        <div className="auth-footer">
+          <p className="muted">
+            Already have an account? <Link href="/login">Log in</Link>
+          </p>
+        </div>
       </div>
     </div>
   );

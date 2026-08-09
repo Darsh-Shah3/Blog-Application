@@ -9,6 +9,7 @@ import { useToast } from '@/lib/toast';
 import { SpinnerLabel } from '@/components/loaders';
 import { useTheme } from '@/lib/theme';
 import { MoonIcon, SunIcon } from '@/components/icons';
+import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -51,25 +52,31 @@ export default function LoginPage() {
         </Link>
         <h1>Welcome back</h1>
         <p className="muted auth-lead">Sign in to join communities and post.</p>
+
         <form className="form" onSubmit={onSubmit}>
           <label>
             Email or username
-            <input value={emailOrUsername} onChange={(e) => setEmailOrUsername(e.target.value)} required />
+            <input value={emailOrUsername} onChange={(e) => setEmailOrUsername(e.target.value)} required autoComplete="username" />
           </label>
           <label>
             Password
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
           </label>
           <button className="btn" type="submit" disabled={busy}>
             {busy ? <SpinnerLabel label="Signing in…" /> : 'Log in'}
           </button>
         </form>
-        <p className="muted">
-          <Link href="/forgot-password">Forgot password?</Link>
-        </p>
-        <p className="muted" style={{ marginBottom: 0 }}>
-          New here? <Link href="/register">Create an account</Link>
-        </p>
+
+        <SocialAuthButtons mode="login" />
+
+        <div className="auth-footer">
+          <p className="muted">
+            <Link href="/forgot-password">Forgot password?</Link>
+          </p>
+          <p className="muted">
+            New here? <Link href="/register">Create an account</Link>
+          </p>
+        </div>
       </div>
     </div>
   );

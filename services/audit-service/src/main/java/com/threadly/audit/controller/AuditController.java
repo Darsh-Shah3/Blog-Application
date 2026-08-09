@@ -50,18 +50,20 @@ public class AuditController {
                 service, action, resourceType, actorUsername, actorUserId, q, from, to, pageable));
     }
 
-    /** Admin platform overview report. */
+    /** Admin platform overview report (totals + chart series for analytics UI). */
     @GetMapping("/api/v1/reports/overview")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<PlatformReportResponse> overview() {
-        return ResponseEntity.ok(auditService.platformReport());
+    public ResponseEntity<PlatformReportResponse> overview(
+            @RequestParam(defaultValue = "14") int days) {
+        return ResponseEntity.ok(auditService.platformReport(days));
     }
 
-    /** Activity report (same 7-day breakdown nested in overview; exposed separately for API clarity). */
+    /** Activity report (same payload as overview; kept for API clarity). */
     @GetMapping("/api/v1/reports/activity")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<PlatformReportResponse> activity() {
-        return ResponseEntity.ok(auditService.platformReport());
+    public ResponseEntity<PlatformReportResponse> activity(
+            @RequestParam(defaultValue = "14") int days) {
+        return ResponseEntity.ok(auditService.platformReport(days));
     }
 
     /**

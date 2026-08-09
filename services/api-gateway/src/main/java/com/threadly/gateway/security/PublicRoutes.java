@@ -25,7 +25,9 @@ public final class PublicRoutes {
         if (path.equals("/api/v1/auth/signup")
                 || path.equals("/api/v1/auth/login")
                 || path.equals("/api/v1/auth/forgot-password")
-                || path.equals("/api/v1/auth/reset-password")) {
+                || path.equals("/api/v1/auth/reset-password")
+                // Social login start + callback — guests must reach these without a JWT
+                || path.startsWith("/api/v1/auth/oauth/")) {
             return true;
         }
         // WebSocket upgrade for STOMP community chat (JWT on STOMP CONNECT)

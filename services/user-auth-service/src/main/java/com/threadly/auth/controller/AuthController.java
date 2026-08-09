@@ -2,6 +2,7 @@ package com.threadly.auth.controller;
 
 import com.threadly.auth.dto.*;
 import com.threadly.auth.service.AuthService;
+import com.threadly.auth.service.OAuthService;
 import com.threadly.auth.service.PasswordResetService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final PasswordResetService passwordResetService;
+    private final OAuthService oAuthService;
 
     @PostMapping("/signup")
     public ResponseEntity<AuthResponse> signup(@Valid @RequestBody RegisterRequest request) {
@@ -28,6 +30,18 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    /** Starts OAuth redirect for Google, Instagram, or X when app.oauth.*.client-id is set. */
+    @GetMapping("/oauth/{provider}/start")
+    public ResponseEntity<OAuthStartResponse> oauthStart(
+            @PathVariable String provider,
+            @RequestParam(required = false) String returnTo) {
+        OAuthStartResponse body = oAuthService.start(provider, returnTo);
+        if (!body.isConfigured()) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(body);
+        }
+        return ResponseEntity.ok(body);
     }
 
     @PostMapping("/forgot-password")
