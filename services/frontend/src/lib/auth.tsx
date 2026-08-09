@@ -9,6 +9,8 @@ type AuthContextValue = {
   loading: boolean;
   login: (emailOrUsername: string, password: string) => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
+  /** Store JWT + user from OAuth (or any AuthResponse). */
+  applySession: (res: AuthResponse) => void;
   logout: () => void;
   refreshMe: () => Promise<void>;
 };
@@ -59,6 +61,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         method: 'POST',
         body: JSON.stringify({ username, email, password, displayName: username }),
       });
+      applyAuth(res);
+    },
+    applySession(res) {
       applyAuth(res);
     },
     logout() {

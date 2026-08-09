@@ -7,6 +7,7 @@ import { api, friendlyError, getCommunityChatWsUrl, Page } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
 import { SpinnerLabel } from '@/components/loaders';
+import { AuthorAvatar, AuthorName, usePrefetchAuthors } from '@/components/AuthorIdentity';
 
 export type ChatMessage = {
   id: string;
@@ -87,6 +88,7 @@ export function CommunityChat({
 
   const liveRef = useRef(live);
   liveRef.current = live;
+  usePrefetchAuthors(messages.map((m) => m.authorUsername));
 
   useEffect(() => {
     setLoading(true);
@@ -218,11 +220,16 @@ export function CommunityChat({
           const mine = user?.id === m.authorId;
           return (
             <div key={m.id} className={`chat-bubble ${mine ? 'mine' : ''}`}>
-              <div className="chat-bubble-meta">
-                <Link href={`/u/${name}`}>{name}</Link>
-                <span className="muted">{relativeTime(m.createdAt)}</span>
+              <div className="chat-bubble-row">
+                <AuthorAvatar username={name} size={32} className="chat-bubble-avatar" />
+                <div className="chat-bubble-content">
+                  <div className="chat-bubble-meta">
+                    <AuthorName username={name} />
+                    <span className="muted">{relativeTime(m.createdAt)}</span>
+                  </div>
+                  <p className="chat-bubble-body">{m.body}</p>
+                </div>
               </div>
-              <p className="chat-bubble-body">{m.body}</p>
             </div>
           );
         })}

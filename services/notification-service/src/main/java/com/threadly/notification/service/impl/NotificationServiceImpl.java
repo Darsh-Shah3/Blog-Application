@@ -156,6 +156,15 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public long unreadCount(UUID userId, String type) {
+        if (type == null || type.isBlank()) {
+            return unreadCount(userId);
+        }
+        return repository.countByUserIdAndTypeAndReadAtIsNull(userId, type.trim());
+    }
+
+    @Override
     @Transactional
     public NotificationResponse markRead(UUID userId, UUID notificationId) {
         Notification n = repository.findById(notificationId)
@@ -182,6 +191,14 @@ public class NotificationServiceImpl implements NotificationService {
         }
         repository.saveAll(page);
         return count;
+    }
+
+    @Override
+    @Transactional
+    public int markReadMatching(UUID userId, String type, String actorUsername) {
+        String t = type == null || type.isBlank() ? null : type.trim();
+        String actor = actorUsername == null || actorUsername.isBlank() ? null : actorUsername.trim();
+        return repository.markReadMatching(userId, t, actor, Instant.now());
     }
 
     private NotificationResponse toResponse(Notification n) {

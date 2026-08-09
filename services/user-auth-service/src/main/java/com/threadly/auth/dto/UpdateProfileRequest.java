@@ -10,4 +10,11 @@ public class UpdateProfileRequest {
 
     @Size(max = 500)
     private String bio;
+
+    /**
+     * When present: non-blank UUID string sets the avatar; blank string clears it.
+     * When omitted (null), avatar is left unchanged.
+     */
+    @Size(max = 40)
+    private String avatarMediaId;
 }

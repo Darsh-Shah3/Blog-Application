@@ -9,6 +9,8 @@ import { useToast } from '@/lib/toast';
 import { canDeleteContent } from '@/lib/rbac';
 import { DeleteIconBtn, ViewIconLink } from '@/components/ActionIcon';
 import { MessageCircleIcon } from '@/components/icons';
+import { AuthorAvatar, AuthorName } from '@/components/AuthorIdentity';
+import { usePrefetchAuthors } from '@/components/AuthorIdentity';
 
 export function PostCard({
   post,
@@ -97,6 +99,7 @@ export function PostCard({
 
   const communityLabel = post.communityName || post.communitySlug || 'Community';
   const authorLabel = post.authorUsername || 'user';
+  usePrefetchAuthors([post.authorUsername]);
 
   return (
     <article
@@ -117,20 +120,23 @@ export function PostCard({
         <button className={`vote-btn down ${myVote === -1 ? 'active' : ''}`} onClick={() => vote(-1)} type="button">▼</button>
       </div>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div className="post-meta">
-          {post.communitySlug ? (
-            <Link href={`/c/${post.communitySlug}`} onClick={stop}>{communityLabel}</Link>
-          ) : (
-            <span>{communityLabel}</span>
-          )}
-          {' · '}
-          {post.authorUsername ? (
-            <Link href={`/u/${post.authorUsername}`} onClick={stop}>{authorLabel}</Link>
-          ) : (
-            <span>{authorLabel}</span>
-          )}
-          {' · '}
-          {new Date(post.createdAt).toLocaleString()}
+        <div className="post-meta post-meta-with-avatar">
+          <AuthorAvatar username={post.authorUsername} size={28} className="post-meta-avatar" />
+          <span className="post-meta-text">
+            {post.communitySlug ? (
+              <Link href={`/c/${post.communitySlug}`} onClick={stop}>{communityLabel}</Link>
+            ) : (
+              <span>{communityLabel}</span>
+            )}
+            {' · '}
+            {post.authorUsername ? (
+              <AuthorName username={post.authorUsername} onClick={stop} />
+            ) : (
+              <span>{authorLabel}</span>
+            )}
+            {' · '}
+            {new Date(post.createdAt).toLocaleString()}
+          </span>
         </div>
         {!expandedBody && (
           <h2 className="post-title">

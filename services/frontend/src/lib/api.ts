@@ -4,9 +4,15 @@ export type User = {
   email: string;
   displayName: string;
   bio?: string | null;
+  /** media-service id for display picture */
+  avatarMediaId?: string | null;
+  /** relative media content path when set */
+  avatarUrl?: string | null;
   karma: number;
   roles?: string[];
   permissions?: string[];
+  /** Soft-deleted: content may remain; login disabled */
+  deleted?: boolean;
 };
 
 export type RoleInfo = {
@@ -244,6 +250,7 @@ const PUBLIC_AUTH_PREFIXES = [
   '/api/v1/auth/signup',
   '/api/v1/auth/forgot-password',
   '/api/v1/auth/reset-password',
+  '/api/v1/auth/oauth/',
 ];
 
 /** List/browse GETs work without a session; by-id and mutations need JWT. */

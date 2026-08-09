@@ -8,6 +8,8 @@ import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
 import { SpinnerLabel } from '@/components/loaders';
 import { ClockIcon, LinkIcon, PaperclipIcon, PenIcon } from '@/components/icons';
+import { AuthorAvatar, VerifiedTick } from '@/components/AuthorIdentity';
+import { isSiteAdmin } from '@/lib/authorDirectory';
 
 type PostType = 'TEXT' | 'LINK' | 'IMAGE' | 'FILE';
 
@@ -216,7 +218,7 @@ export function CreatePostModal({
     return createPortal(gate, document.body);
   }
 
-  const initial = (user.displayName || user.username || '?').slice(0, 1).toUpperCase();
+  const admin = isSiteAdmin(user.roles, user.username);
 
   const dialog = (
     <div
@@ -229,9 +231,18 @@ export function CreatePostModal({
       <div className="post-modal-card composer-card" onClick={(e) => e.stopPropagation()}>
         <header className="composer-header">
           <div className="composer-author">
-            <div className="composer-avatar" aria-hidden>{initial}</div>
+            <AuthorAvatar
+              username={user.username}
+              avatarMediaId={user.avatarMediaId}
+              roles={user.roles}
+              size={40}
+              className="composer-avatar-img"
+            />
             <div>
-              <div className="composer-name">{user.displayName || user.username}</div>
+              <div className="composer-name author-name">
+                <span>{user.displayName || user.username}</span>
+                {admin && <VerifiedTick size={14} />}
+              </div>
               <label className="composer-audience">
                 <span className="muted">Post to</span>
                 <select

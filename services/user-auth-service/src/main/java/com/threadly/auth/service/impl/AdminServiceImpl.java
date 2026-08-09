@@ -12,6 +12,7 @@ import com.threadly.auth.rbac.RbacCatalog;
 import com.threadly.auth.repository.RoleRepository;
 import com.threadly.auth.repository.UserRepository;
 import com.threadly.auth.service.AdminService;
+import com.threadly.auth.service.MailService;
 import com.threadly.auth.util.AuditActors;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -39,6 +40,7 @@ public class AdminServiceImpl implements AdminService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final UserMapper userMapper;
+    private final MailService mailService;
 
     @Override
     @Transactional(readOnly = true)
@@ -108,10 +110,16 @@ public class AdminServiceImpl implements AdminService {
             }
         }
         String actor = AuditActors.resolve(actorUsername, actorId);
+        String email = user.getEmail();
+        String uname = user.getUsername();
         user.setDeletedAt(Instant.now());
         user.setUpdatedBy(actor);
         userRepository.save(user);
-        log.info("User soft-deleted id={} username={} by actor={}", userId, user.getUsername(), actor);
+        log.info("User soft-deleted id={} username={} by actor={}", userId, uname, actor);
+        // Best-effort SMTP notice — posts/messages are kept; login disabled
+        if (email != null && !email.isBlank()) {
+            mailService.sendAccountDeletedByAdmin(email, uname);
+        }
     }
 
     @Override

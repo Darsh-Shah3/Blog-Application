@@ -36,6 +36,10 @@ public class User {
     @Column(length = 500)
     private String bio;
 
+    /** Media-service file id for profile display picture; content via /api/v1/media/{id}/content. */
+    @Column(name = "avatar_media_id")
+    private UUID avatarMediaId;
+
     /**
      * Reputation score (Reddit-style “karma”). Increased/decreased by the vote-service
      * via internal API when others upvote/downvote this user's posts or comments.

@@ -6,6 +6,7 @@ import com.threadly.auth.security.RateLimitFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -45,6 +46,8 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
                         ).permitAll()
+                        // Public profile cards (gateway already leaves these GET paths unauthenticated)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/profiles/**").permitAll()
                         // Cross-service only; ROLE_INTERNAL set by InternalApiKeyFilter.
                         .requestMatchers("/api/v1/internal/**").hasRole("INTERNAL")
                         .anyRequest().authenticated()

@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { api, friendlyError, User } from '@/lib/api';
+import { api, friendlyError, NotificationItem, Page, User } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
 import { DirectChat } from '@/components/DirectChat';
 import { ContentPlaceholder, SpinnerLabel } from '@/components/loaders';
+import { AuthorAvatar, AuthorName, usePrefetchAuthors } from '@/components/AuthorIdentity';
 
 export type DmThread = {
   id: string;
@@ -42,8 +43,52 @@ export default function MessagesPage() {
   const [startUser, setStartUser] = useState('');
   const [starting, setStarting] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(false);
+  /** peerUsername (lower) → unread DM notification count */
+  const [unreadByPeer, setUnreadByPeer] = useState<Record<string, number>>({});
 
   const active = threads.find((t) => t.id === activeId) || null;
+  usePrefetchAuthors(threads.map((t) => t.peerUsername));
+
+  const loadUnreadByPeer = useCallback(async () => {
+    if (!token) return;
+    try {
+      const page = await api<Page<NotificationItem>>(
+        '/api/v1/notifications?type=DIRECT_MESSAGE&unreadOnly=true&size=100&sort=createdAt,desc',
+        {},
+        token
+      );
+      const map: Record<string, number> = {};
+      for (const n of page.content || []) {
+        const key = (n.actorUsername || '').trim().toLowerCase();
+        if (!key) continue;
+        map[key] = (map[key] || 0) + 1;
+      }
+      setUnreadByPeer(map);
+    } catch {
+      // badges are best-effort
+    }
+  }, [token]);
+
+  /** WhatsApp-style: opening a chat clears that peer's message notifications. */
+  useEffect(() => {
+    if (!token || !active?.peerUsername) return;
+    const actor = active.peerUsername;
+    const key = actor.trim().toLowerCase();
+    api<{ marked: number }>(
+      `/api/v1/notifications/read-matching?type=DIRECT_MESSAGE&actorUsername=${encodeURIComponent(actor)}`,
+      { method: 'POST' },
+      token
+    )
+      .then(() => {
+        setUnreadByPeer((prev) => {
+          if (!prev[key]) return prev;
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+      })
+      .catch(() => undefined);
+  }, [token, active?.id, active?.peerUsername]);
 
   const loadThreads = useCallback(async () => {
     if (!token) return;
@@ -61,10 +106,14 @@ export default function MessagesPage() {
     if (authLoading) return;
     if (!token) {
       setLoading(false);
+      setUnreadByPeer({});
       return;
     }
     loadThreads();
-  }, [token, authLoading, loadThreads]);
+    loadUnreadByPeer();
+    const t = setInterval(loadUnreadByPeer, 15000);
+    return () => clearInterval(t);
+  }, [token, authLoading, loadThreads, loadUnreadByPeer]);
 
   useEffect(() => {
     if (!token || authLoading) return;
@@ -102,12 +151,6 @@ export default function MessagesPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, authLoading, searchParams]);
-
-  useEffect(() => {
-    if (!activeId && threads.length > 0) {
-      setActiveId(threads[0]!.id);
-    }
-  }, [threads, activeId]);
 
   const startByUsername = async (e: FormEvent) => {
     e.preventDefault();
@@ -201,28 +244,37 @@ export default function MessagesPage() {
                 No conversations yet. Open a profile and hit Message, or start one above.
               </p>
             )}
-            {threads.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="listitem"
-                className={`dm-thread-item${activeId === t.id ? ' is-active' : ''}`}
-                onClick={() => setActiveId(t.id)}
-              >
-                <span className="dm-thread-avatar" aria-hidden>
-                  {(t.peerUsername || '?')[0]!.toUpperCase()}
-                </span>
+            {threads.map((t) => {
+              const unread = unreadByPeer[(t.peerUsername || '').toLowerCase()] || 0;
+              const isActive = activeId === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="listitem"
+                  className={`dm-thread-item${isActive ? ' is-active' : ''}${unread > 0 && !isActive ? ' has-unread' : ''}`}
+                  onClick={() => setActiveId(t.id)}
+                >
+                <AuthorAvatar username={t.peerUsername} size={36} className="dm-thread-avatar" />
                 <span className="dm-thread-body">
                   <span className="dm-thread-top">
-                    <strong>@{t.peerUsername}</strong>
-                    <span className="muted">{relativeTime(t.lastMessageAt || t.createdAt)}</span>
+                    <AuthorName username={t.peerUsername} href={false} />
+                    <span className="dm-thread-meta">
+                        <span className="muted">{relativeTime(t.lastMessageAt || t.createdAt)}</span>
+                        {unread > 0 && !isActive && (
+                          <span className="dm-unread-badge" aria-label={`${unread} unread`}>
+                            {unread > 99 ? '99+' : unread}
+                          </span>
+                        )}
+                      </span>
+                    </span>
+                    <span className={`dm-thread-preview${unread > 0 && !isActive ? ' is-unread' : ' muted'}`}>
+                      {t.lastMessagePreview || 'No messages yet'}
+                    </span>
                   </span>
-                  <span className="dm-thread-preview muted">
-                    {t.lastMessagePreview || 'No messages yet'}
-                  </span>
-                </span>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
         </aside>
 

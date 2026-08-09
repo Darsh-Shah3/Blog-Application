@@ -8,15 +8,11 @@ import { useToast } from '@/lib/toast';
 import { canDeleteContent } from '@/lib/rbac';
 import { DeleteIconBtn } from '@/components/ActionIcon';
 import { PostCard } from '@/components/PostCard';
+import { AuthorAvatar, AuthorName, usePrefetchAuthors } from '@/components/AuthorIdentity';
 import Link from 'next/link';
 import { PostDetailSkeleton, SpinnerLabel } from '@/components/loaders';
 
 const COMMENT_PAGE = 25;
-
-function avatarLetter(name?: string | null) {
-  const s = (name || '?').trim();
-  return s ? s[0]!.toUpperCase() : '?';
-}
 
 function relativeTime(iso: string) {
   const then = new Date(iso).getTime();
@@ -30,6 +26,14 @@ function relativeTime(iso: string) {
   const day = Math.floor(hr / 24);
   if (day < 30) return `${day} day${day === 1 ? '' : 's'} ago`;
   return new Date(iso).toLocaleDateString();
+}
+
+function collectCommentAuthors(nodes: CommentNode[], out: string[] = []) {
+  for (const n of nodes) {
+    if (n.authorUsername) out.push(n.authorUsername);
+    if (n.replies?.length) collectCommentAuthors(n.replies, out);
+  }
+  return out;
 }
 
 function CommentTree({
@@ -59,6 +63,8 @@ function CommentTree({
   depth?: number;
   parentAuthor?: string;
 }) {
+  usePrefetchAuthors(collectCommentAuthors(nodes));
+
   return (
     <div className={depth === 0 ? 'yt-comment-list' : 'yt-comment-replies'}>
       {nodes.map((c) => {
@@ -68,10 +74,10 @@ function CommentTree({
           <div key={c.id} className={`yt-thread ${depth > 0 ? 'yt-thread-nested' : ''}`}>
             <div className="yt-thread-line" aria-hidden="true" />
             <div className={`yt-comment ${depth > 0 ? 'yt-comment-nested' : ''}`}>
-              <div className="yt-avatar" aria-hidden="true">{avatarLetter(c.authorUsername)}</div>
+              <AuthorAvatar username={c.authorUsername} size={36} className="yt-avatar-img" />
               <div className="yt-comment-body">
                 <div className="yt-comment-meta">
-                  <Link href={`/u/${name}`} className="yt-author">{name}</Link>
+                  <AuthorName username={c.authorUsername || name} className="yt-author" />
                   {parentAuthor && depth > 0 && (
                     <span className="yt-reply-to">
                       replied to <strong>@{parentAuthor}</strong>
@@ -377,9 +383,13 @@ export default function PostDetailPage() {
             </h2>
             {user ? (
               <form className="yt-composer" onSubmit={submitTopLevel}>
-                <div className="yt-avatar yt-avatar-self" aria-hidden="true">
-                  {avatarLetter(user.username)}
-                </div>
+                <AuthorAvatar
+                  username={user.username}
+                  avatarMediaId={user.avatarMediaId}
+                  roles={user.roles}
+                  size={36}
+                  className="yt-avatar-img"
+                />
                 <div className="yt-composer-fields">
                   <textarea
                     value={content}
@@ -483,9 +493,9 @@ export default function PostDetailPage() {
               <h2>Author</h2>
             </div>
             <div className="post-rail-author">
-              <div className="yt-avatar" aria-hidden="true">{avatarLetter(authorName)}</div>
+              <AuthorAvatar username={authorName} size={40} className="yt-avatar-img" />
               <div className="post-rail-author-text">
-                <Link href={`/u/${authorName}`}>{authorName}</Link>
+                <AuthorName username={authorName} />
                 <p className="muted" style={{ margin: '0.15rem 0 0', fontSize: '0.82rem' }}>
                   Posted {relativeTime(post.createdAt)}
                 </p>

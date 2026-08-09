@@ -40,7 +40,7 @@ function ActionGlyph({ action }: { action: string }) {
 export default function AdminPage() {
   const { user, token, loading } = useAuth();
   const router = useRouter();
-  const { success, error, info } = useToast();
+  const { success, error, info, confirm } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [q, setQ] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -49,6 +49,7 @@ export default function AdminPage() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [auditQ, setAuditQ] = useState('');
   const [auditAction, setAuditAction] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -140,6 +141,32 @@ export default function AdminPage() {
       error(friendlyError(e, 'Could not update roles.'));
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const deleteUser = async (u: User) => {
+    if (!token || !user) return;
+    if (u.id === user.id) {
+      error('Use your profile to delete your own account.');
+      return;
+    }
+    const ok = await confirm({
+      title: `Delete @${u.username}?`,
+      message:
+        'Soft-deletes the account. Posts stay on Threadly and will show as from a deleted account. The member is emailed if SMTP is enabled.',
+      confirmLabel: 'Delete account',
+    });
+    if (!ok) return;
+    setDeletingId(u.id);
+    try {
+      await api(`/api/v1/admin/users/${u.id}`, { method: 'DELETE' }, token);
+      success(`@${u.username} account deleted.`);
+      await load();
+      await loadReport();
+    } catch (e) {
+      error(friendlyError(e, 'Could not delete user.'));
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -266,6 +293,17 @@ export default function AdminPage() {
                   >
                     {busyId === u.id ? <SpinnerLabel label="Saving…" /> : 'Save'}
                   </button>
+                  {u.id !== user.id && (
+                    <button
+                      className="btn ghost"
+                      type="button"
+                      disabled={deletingId === u.id}
+                      onClick={() => deleteUser(u)}
+                      title="Soft-delete account"
+                    >
+                      {deletingId === u.id ? <SpinnerLabel label="Deleting…" /> : 'Delete account'}
+                    </button>
+                  )}
                 </div>
               </article>
             ))}

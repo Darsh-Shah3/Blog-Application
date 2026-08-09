@@ -67,6 +67,7 @@ app:
     redirect-base-url: ${OAUTH_REDIRECT_BASE_URL:${FRONTEND_BASE_URL:http://localhost:3000}}
     google:
       client-id: ${OAUTH_GOOGLE_CLIENT_ID:}
+      client-secret: ${OAUTH_GOOGLE_CLIENT_SECRET:}
 
 springdoc:
   api-docs:

@@ -20,7 +20,11 @@ public interface NotificationService {
 
     long unreadCount(UUID userId);
 
+    long unreadCount(UUID userId, String type);
+
     NotificationResponse markRead(UUID userId, UUID notificationId);
 
     int markAllRead(UUID userId);
+
+    int markReadMatching(UUID userId, String type, String actorUsername);
 }

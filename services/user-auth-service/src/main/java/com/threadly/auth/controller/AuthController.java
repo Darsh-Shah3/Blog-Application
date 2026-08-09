@@ -32,7 +32,7 @@ public class AuthController {
         return ResponseEntity.ok(authService.login(request));
     }
 
-    /** Starts OAuth redirect for Google, Instagram, or X when app.oauth.*.client-id is set. */
+    /** Starts OAuth redirect for Google when client id + secret are set. */
     @GetMapping("/oauth/{provider}/start")
     public ResponseEntity<OAuthStartResponse> oauthStart(
             @PathVariable String provider,
@@ -42,6 +42,17 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(body);
         }
         return ResponseEntity.ok(body);
+    }
+
+    /**
+     * Completes Google OAuth: exchange {@code code}, upsert user, return Threadly JWT.
+     * Called from the frontend callback page (redirect_uri is the Next.js route).
+     */
+    @PostMapping("/oauth/{provider}/callback")
+    public ResponseEntity<AuthResponse> oauthCallback(
+            @PathVariable String provider,
+            @Valid @RequestBody OAuthCallbackRequest request) {
+        return ResponseEntity.ok(oAuthService.complete(provider, request.getCode(), request.getState()));
     }
 
     @PostMapping("/forgot-password")

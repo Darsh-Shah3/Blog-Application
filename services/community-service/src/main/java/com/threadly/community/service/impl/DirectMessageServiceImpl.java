@@ -1,5 +1,6 @@
 package com.threadly.community.service.impl;
 
+import com.threadly.community.client.NotificationClient;
 import com.threadly.community.dto.CreateChatMessageRequest;
 import com.threadly.community.dto.DmMessageResponse;
 import com.threadly.community.dto.DmThreadResponse;
@@ -37,6 +38,7 @@ public class DirectMessageServiceImpl implements DirectMessageService {
     private final DmThreadRepository threadRepository;
     private final DmMessageRepository messageRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final NotificationClient notificationClient;
 
     @Override
     @Transactional(readOnly = true)
@@ -165,6 +167,22 @@ public class DirectMessageServiceImpl implements DirectMessageService {
         threadRepository.save(thread);
 
         messagingTemplate.convertAndSend(topic(threadId), response);
+
+        UUID peerId = thread.peerOf(me);
+        if (peerId != null) {
+            String preview = body.length() > 160 ? body.substring(0, 157) + "…" : body;
+            String link = "/messages?with=" + name;
+            notificationClient.notifyUser(
+                    peerId,
+                    "DIRECT_MESSAGE",
+                    "Message from @" + name,
+                    preview,
+                    link,
+                    name,
+                    "DM_MESSAGE",
+                    response.getId() != null ? response.getId().toString() : null
+            );
+        }
         return response;
     }
 

@@ -56,8 +56,20 @@ public class NotificationController {
 
     @GetMapping("/api/v1/notifications/unread-count")
     public ResponseEntity<Map<String, Long>> unreadCount(
-            @RequestHeader(value = "X-User-Id", required = false) java.util.UUID userId) {
-        return ResponseEntity.ok(Map.of("count", notificationService.unreadCount(requireUser(userId))));
+            @RequestHeader(value = "X-User-Id", required = false) java.util.UUID userId,
+            @RequestParam(required = false) String type) {
+        return ResponseEntity.ok(Map.of("count", notificationService.unreadCount(requireUser(userId), type)));
+    }
+
+    @PostMapping("/api/v1/notifications/read-matching")
+    public ResponseEntity<Map<String, Integer>> markMatching(
+            @RequestHeader(value = "X-User-Id", required = false) java.util.UUID userId,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String actorUsername) {
+        return ResponseEntity.ok(Map.of(
+                "marked",
+                notificationService.markReadMatching(requireUser(userId), type, actorUsername)
+        ));
     }
 
     @PostMapping("/api/v1/notifications/{id}/read")

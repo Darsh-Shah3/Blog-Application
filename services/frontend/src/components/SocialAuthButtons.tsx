@@ -23,7 +23,7 @@ export function SocialAuthButtons({ mode }: { mode: 'login' | 'signup' }) {
   const startGoogle = async () => {
     const api = getApiUrl();
     const returnTo = typeof window !== 'undefined'
-      ? `${window.location.origin}/login?oauth=google`
+      ? `${window.location.origin}/`
       : '';
     try {
       const res = await fetch(
@@ -38,7 +38,7 @@ export function SocialAuthButtons({ mode }: { mode: 'login' | 'signup' }) {
       if (res.status === 501 || res.status === 503) {
         info(
           body.message
-          || 'Google sign-in is almost ready — add OAUTH_GOOGLE_CLIENT_ID on the server. Email login still works.'
+          || 'Google sign-in needs OAUTH_GOOGLE_CLIENT_ID and OAUTH_GOOGLE_CLIENT_SECRET on the server. Email login still works.'
         );
         return;
       }

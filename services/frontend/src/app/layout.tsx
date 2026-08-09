@@ -3,6 +3,7 @@ import Script from 'next/script';
 import { Fraunces, DM_Sans } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/lib/auth';
+import { AuthorDirectoryProvider } from '@/lib/authorDirectory';
 import { ToastProvider } from '@/lib/toast';
 import { ThemeProvider } from '@/lib/theme';
 import { SplashScreen } from '@/components/SplashScreen';
@@ -55,8 +56,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <ToastProvider>
             <AuthProvider>
-              <SplashScreen />
-              <AppChrome>{children}</AppChrome>
+              <AuthorDirectoryProvider>
+                <SplashScreen />
+                <AppChrome>{children}</AppChrome>
+              </AuthorDirectoryProvider>
             </AuthProvider>
           </ToastProvider>
         </ThemeProvider>

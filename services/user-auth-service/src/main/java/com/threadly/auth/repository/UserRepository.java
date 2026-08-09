@@ -36,4 +36,13 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     @Query(AuthQueries.USER_COUNT_ACTIVE_BY_ROLE_NAME)
     long countActiveByRoleName(@Param("roleName") String roleName);
+
+    /** Soft-deleted row for a username (most recent first) — used for public “deactivated” cards. */
+    @Query("""
+            select u from User u
+            where lower(u.username) = lower(:username)
+              and u.deletedAt is not null
+            order by u.deletedAt desc
+            """)
+    java.util.List<User> findDeletedByUsername(@Param("username") String username, Pageable pageable);
 }

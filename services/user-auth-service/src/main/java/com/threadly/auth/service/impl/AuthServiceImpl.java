@@ -92,6 +92,72 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
+    public AuthResponse loginOrRegisterOAuth(String email, String displayName, String providerSubject) {
+        String emailKey = email == null ? "" : email.trim().toLowerCase();
+        if (emailKey.isBlank() || !emailKey.contains("@")) {
+            throw new ApiException("Invalid OAuth email", HttpStatus.BAD_REQUEST.value());
+        }
+        var existing = userRepository.findActiveByEmail(emailKey);
+        if (existing.isPresent()) {
+            User user = existing.get();
+            log.info("OAuth login existing userId={} username={} subject={}",
+                    user.getId(), user.getUsername(), providerSubject);
+            return toAuthResponse(user);
+        }
+
+        Role userRole = roleRepository.findByName("ROLE_USER")
+                .orElseThrow(() -> new ApiException("Default role missing", 500));
+        String username = allocateUsername(emailKey);
+        String name = displayName == null || displayName.isBlank() ? username : displayName.trim();
+        if (name.length() > 100) {
+            name = name.substring(0, 100);
+        }
+        // Unusable password — account is OAuth-only unless they later use password reset (if allowed)
+        String passwordHash = passwordEncoder.encode(UUID.randomUUID() + ":" + UUID.randomUUID());
+        User user = User.builder()
+                .username(username)
+                .email(emailKey)
+                .passwordHash(passwordHash)
+                .displayName(name)
+                .bio(null)
+                .karma(0L)
+                .createdBy(username)
+                .updatedBy(username)
+                .build();
+        user.addRole(userRole);
+        user = userRepository.save(user);
+        ensureSocialRow(user);
+        log.info("OAuth registered userId={} username={} email={} subject={}",
+                user.getId(), user.getUsername(), user.getEmail(), providerSubject);
+        return toAuthResponse(user);
+    }
+
+    /** Derive a unique username from the email local-part. */
+    private String allocateUsername(String email) {
+        String local = email.substring(0, email.indexOf('@')).toLowerCase();
+        String base = local.replaceAll("[^a-z0-9_]", "");
+        if (base.length() < 3) {
+            base = ("user" + base).replaceAll("[^a-z0-9_]", "");
+        }
+        if (base.length() < 3) {
+            base = "user";
+        }
+        if (base.length() > 40) {
+            base = base.substring(0, 40);
+        }
+        String candidate = base;
+        int n = 0;
+        while (userRepository.existsActiveByUsername(candidate)) {
+            n++;
+            String suffix = "_" + n;
+            int maxBase = Math.max(1, 50 - suffix.length());
+            candidate = base.substring(0, Math.min(base.length(), maxBase)) + suffix;
+        }
+        return candidate;
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public UserResponse getById(UUID id) {
         log.debug("Get user by id={}", id);
@@ -102,9 +168,15 @@ public class AuthServiceImpl implements AuthService {
     @Transactional(readOnly = true)
     public UserResponse getByUsername(String username) {
         log.debug("Get user by username={}", username);
-        User user = userRepository.findActiveByUsername(username.toLowerCase())
-                .orElseThrow(() -> new ApiException("User not found", HttpStatus.NOT_FOUND.value()));
-        return userMapper.toResponse(user);
+        String key = username == null ? "" : username.trim().toLowerCase();
+        return userRepository.findActiveByUsername(key)
+                .map(userMapper::toResponse)
+                .orElseGet(() -> userRepository
+                        .findDeletedByUsername(key, org.springframework.data.domain.PageRequest.of(0, 1))
+                        .stream()
+                        .findFirst()
+                        .map(userMapper::toDeletedPublicCard)
+                        .orElseThrow(() -> new ApiException("User not found", HttpStatus.NOT_FOUND.value())));
     }
 
     @Override
@@ -117,6 +189,18 @@ public class AuthServiceImpl implements AuthService {
         }
         if (request.getBio() != null) {
             user.setBio(request.getBio());
+        }
+        if (request.getAvatarMediaId() != null) {
+            String raw = request.getAvatarMediaId().trim();
+            if (raw.isEmpty()) {
+                user.setAvatarMediaId(null);
+            } else {
+                try {
+                    user.setAvatarMediaId(UUID.fromString(raw));
+                } catch (IllegalArgumentException ex) {
+                    throw new ApiException("Invalid avatar media id", HttpStatus.BAD_REQUEST.value());
+                }
+            }
         }
         user.setUpdatedBy(user.getUsername());
         return userMapper.toResponse(userRepository.save(user));

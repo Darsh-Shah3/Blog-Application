@@ -59,4 +59,39 @@ public class NotificationClient {
                     communityId, e.getMessage());
         }
     }
+
+    /** Single-user system notification (DMs, etc.). Best-effort; never fails the caller action. */
+    public void notifyUser(
+            UUID userId,
+            String type,
+            String title,
+            String body,
+            String linkUrl,
+            String actorUsername,
+            String resourceType,
+            String resourceId) {
+        if (userId == null || type == null || type.isBlank() || title == null || title.isBlank()) {
+            return;
+        }
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("userId", userId);
+            payload.put("type", type);
+            payload.put("title", title);
+            payload.put("body", body);
+            payload.put("linkUrl", linkUrl);
+            payload.put("actorUsername", actorUsername);
+            payload.put("resourceType", resourceType);
+            payload.put("resourceId", resourceId);
+            webClient.post()
+                    .uri("/api/v1/internal/notifications")
+                    .header("X-Internal-Api-Key", internalApiKey)
+                    .bodyValue(payload)
+                    .retrieve()
+                    .toBodilessEntity()
+                    .block(Duration.ofSeconds(5));
+        } catch (Exception e) {
+            log.warn("User notification failed userId={} type={}: {}", userId, type, e.getMessage());
+        }
+    }
 }

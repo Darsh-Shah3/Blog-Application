@@ -23,6 +23,7 @@ import {
   UsersIcon,
 } from '@/components/icons';
 import { Skeleton } from '@/components/loaders';
+import { UserAvatar } from '@/components/UserAvatar';
 
 const COLLAPSE_KEY = 'threadly-sidebar-collapsed';
 
@@ -60,6 +61,7 @@ export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [unread, setUnread] = useState(0);
+  const [dmUnread, setDmUnread] = useState(0);
 
   useEffect(() => {
     try {
@@ -90,17 +92,21 @@ export function Sidebar() {
   useEffect(() => {
     if (!token) {
       setUnread(0);
+      setDmUnread(0);
       return;
     }
     const load = () => {
       api<{ count: number }>('/api/v1/notifications/unread-count', {}, token)
         .then((r) => setUnread(r.count || 0))
         .catch(() => setUnread(0));
+      api<{ count: number }>('/api/v1/notifications/unread-count?type=DIRECT_MESSAGE', {}, token)
+        .then((r) => setDmUnread(r.count || 0))
+        .catch(() => setDmUnread(0));
     };
     load();
-    const t = setInterval(load, 30000);
+    const t = setInterval(load, 15000);
     return () => clearInterval(t);
-  }, [token]);
+  }, [token, pathname]);
 
   const setCollapsedPersist = (next: boolean) => {
     setCollapsed(next);
@@ -157,6 +163,7 @@ export function Sidebar() {
       href: '/messages',
       label: 'Messages',
       icon: <MessageCircleIcon size={18} />,
+      badge: dmUnread > 0 ? dmUnread : undefined,
       match: (p) => p.startsWith('/messages'),
     });
     mainNav.push({
@@ -418,7 +425,14 @@ export function Sidebar() {
                 }}
               >
                 <span className="user-avatar" aria-hidden="true">
-                  <UserIcon size={16} />
+                  <UserAvatar
+                    username={user.username}
+                    avatarMediaId={user.avatarMediaId}
+                    isAdmin={Boolean(user.roles?.some((r) => r === 'ROLE_ADMIN' || r === 'ADMIN'))
+                      || user.username.toLowerCase() === 'admin'}
+                    size={32}
+                    className="user-avatar-dp"
+                  />
                 </span>
                 <span className="user-meta">
                   <span className="user-name">{user.username}</span>

@@ -10,6 +10,11 @@ public interface AuthService {
 
     AuthResponse login(LoginRequest request);
 
+    /**
+     * Find active user by Google email or create ROLE_USER with unusable password hash.
+     */
+    AuthResponse loginOrRegisterOAuth(String email, String displayName, String providerSubject);
+
     UserResponse getById(UUID id);
 
     UserResponse getByUsername(String username);
