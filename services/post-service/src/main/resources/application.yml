@@ -5,6 +5,10 @@ spring:
   application:
     name: post-service
   data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
     web:
       pageable:
         max-page-size: 50
@@ -32,6 +36,10 @@ management:
 app:
   jwt:
     secret: ${JWT_SECRET:ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
+  redis:
+    enabled: ${REDIS_ENABLED:false}
+  cache:
+    redis-enabled: ${CACHE_REDIS_ENABLED:${REDIS_ENABLED:false}}
   internal-api-key: ${INTERNAL_API_KEY:threadly-internal-dev-key}
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}

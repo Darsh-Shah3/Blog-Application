@@ -1,5 +1,8 @@
 package com.threadly.auth.security;
 
+import io.jsonwebtoken.Claims;
+
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -16,4 +19,11 @@ public interface JwtTokenProvider {
     List<String> extractRoles(String token);
 
     List<String> extractPermissions(String token);
+
+    Claims parseClaims(String token);
+
+    String extractJti(String token);
+
+    /** Remaining lifetime until exp; empty/zero if already expired. */
+    Duration remainingTtl(String token);
 }

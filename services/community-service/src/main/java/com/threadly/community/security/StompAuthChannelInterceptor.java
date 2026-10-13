@@ -20,12 +20,14 @@ import java.util.stream.Collectors;
 /**
  * Authenticates STOMP CONNECT with JWT from Authorization header or {@code token} header.
  * Guests may connect without a token (history is still loaded over REST).
+ * Revoked JWTs (Redis blacklist) are rejected the same as invalid tokens.
  */
 @Component
 @RequiredArgsConstructor
 public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
     private final JwtService jwtService;
+    private final TokenBlacklistChecker tokenBlacklistChecker;
 
     @Override
     public Message<?> preSend(@NonNull Message<?> message, @NonNull MessageChannel channel) {
@@ -48,6 +50,9 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
         try {
             Claims claims = jwtService.parse(token);
+            if (tokenBlacklistChecker.isRevoked(claims)) {
+                return message;
+            }
             String userId = claims.getSubject();
             if (userId == null || userId.isBlank()) {
                 return message;

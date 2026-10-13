@@ -2,6 +2,7 @@ package com.threadly.gateway.filter;
 
 import com.threadly.gateway.security.JwtService;
 import com.threadly.gateway.security.PublicRoutes;
+import com.threadly.gateway.security.TokenBlacklistChecker;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -40,6 +41,7 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     private static final Logger log = LoggerFactory.getLogger(AuthGlobalFilter.class);
 
     private final JwtService jwtService;
+    private final TokenBlacklistChecker tokenBlacklistChecker;
 
     @Value("${app.security.require-jwt-for-all-apis:true}")
     private boolean requireJwtForAllApis;
@@ -104,19 +106,26 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
             List<String> permissions = jwtService.permissions(claims);
             String username = claims.get("username", String.class);
 
-            MDC.put("userId", userId != null ? userId : "-");
-            mutated.header("X-User-Id", userId)
-                    .header("X-User-Roles", String.join(",", roles))
-                    .header("X-User-Permissions", String.join(",", permissions));
-            if (username != null) {
-                mutated.header("X-Username", username);
-            }
+            return tokenBlacklistChecker.isRevoked(claims).flatMap(revoked -> {
+                if (Boolean.TRUE.equals(revoked)) {
+                    log.warn("Revoked JWT rejected userId={} path={}", userId, path);
+                    return unauthorized(exchange, "Token has been revoked. Please log in again.");
+                }
 
-            log.info("JWT authenticated userId={} username={} roles={} path={} method={}",
-                    userId, username, roles, path, method);
+                MDC.put("userId", userId != null ? userId : "-");
+                mutated.header("X-User-Id", userId)
+                        .header("X-User-Roles", String.join(",", roles))
+                        .header("X-User-Permissions", String.join(",", permissions));
+                if (username != null) {
+                    mutated.header("X-Username", username);
+                }
 
-            return chain.filter(exchange.mutate().request(mutated.build()).build())
-                    .doFinally(s -> MDC.clear());
+                log.info("JWT authenticated userId={} username={} roles={} path={} method={}",
+                        userId, username, roles, path, method);
+
+                return chain.filter(exchange.mutate().request(mutated.build()).build())
+                        .doFinally(s -> MDC.clear());
+            });
         } catch (Exception ex) {
             log.warn("JWT validation failed path={} reason={}", path, ex.getMessage());
             return unauthorized(exchange, "Invalid or expired JWT token");

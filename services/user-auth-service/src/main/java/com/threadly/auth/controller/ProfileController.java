@@ -17,19 +17,11 @@ public class ProfileController {
 
     @GetMapping("/{username}")
     public ResponseEntity<UserResponse> byUsername(@PathVariable String username) {
-        return ResponseEntity.ok(publicCard(authService.getByUsername(username)));
+        return ResponseEntity.ok(authService.getByUsername(username));
     }
 
     @GetMapping("/by-id/{id}")
     public ResponseEntity<UserResponse> byId(@PathVariable UUID id) {
-        return ResponseEntity.ok(publicCard(authService.getById(id)));
-    }
-
-    /** Public cards never expose email. */
-    private static UserResponse publicCard(UserResponse user) {
-        if (user != null) {
-            user.setEmail(null);
-        }
-        return user;
+        return ResponseEntity.ok(authService.getPublicById(id));
     }
 }

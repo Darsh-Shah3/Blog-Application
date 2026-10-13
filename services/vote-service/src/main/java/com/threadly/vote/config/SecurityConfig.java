@@ -25,7 +25,14 @@ public class SecurityConfig {
         http.csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers(
+                                "/actuator/health",
+                                "/actuator/health/**",
+                                "/actuator/prometheus",
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html"
+                        ).permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(internalApiKeyFilter, UsernamePasswordAuthenticationFilter.class)

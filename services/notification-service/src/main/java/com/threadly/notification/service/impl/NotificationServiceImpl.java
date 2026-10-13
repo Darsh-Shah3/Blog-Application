@@ -1,5 +1,6 @@
 package com.threadly.notification.service.impl;
 
+import com.threadly.notification.cache.UnreadCountCache;
 import com.threadly.notification.client.AuthClient;
 import com.threadly.notification.dto.CommunityChatEventRequest;
 import com.threadly.notification.dto.NotificationResponse;
@@ -33,6 +34,7 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationRepository repository;
     private final AuthClient authClient;
     private final OutboundMailService mailService;
+    private final UnreadCountCache unreadCountCache;
 
     @Override
     @Transactional
@@ -68,6 +70,7 @@ public class NotificationServiceImpl implements NotificationService {
                     .resourceType("POST")
                     .resourceId(String.valueOf(request.getPostId()))
                     .build());
+            unreadCountCache.increment(follower.id(), "FOLLOW_NEW_POST");
             mailService.sendNewPostAlert(follower.email(), request.getAuthorUsername(),
                     request.getPostTitle(), link);
             log.debug("Notified follower={} notifId={}", follower.id(), n.getId());
@@ -114,6 +117,7 @@ public class NotificationServiceImpl implements NotificationService {
                     .resourceType("COMMUNITY_MESSAGE")
                     .resourceId(String.valueOf(request.getMessageId()))
                     .build());
+            unreadCountCache.increment(userId, "COMMUNITY_CHAT");
             saved++;
         }
         log.info("Community-chat fanout communityId={} notified={}", request.getCommunityId(), saved);
@@ -134,6 +138,7 @@ public class NotificationServiceImpl implements NotificationService {
                 .resourceType(request.getResourceType())
                 .resourceId(request.getResourceId())
                 .build());
+        unreadCountCache.increment(request.getUserId(), request.getType());
         return toResponse(n);
     }
 
@@ -152,7 +157,11 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     @Transactional(readOnly = true)
     public long unreadCount(UUID userId) {
-        return repository.countByUserIdAndReadAtIsNull(userId);
+        return unreadCountCache.get(userId, null).orElseGet(() -> {
+            long count = repository.countByUserIdAndReadAtIsNull(userId);
+            unreadCountCache.set(userId, null, count);
+            return count;
+        });
     }
 
     @Override
@@ -161,7 +170,12 @@ public class NotificationServiceImpl implements NotificationService {
         if (type == null || type.isBlank()) {
             return unreadCount(userId);
         }
-        return repository.countByUserIdAndTypeAndReadAtIsNull(userId, type.trim());
+        String t = type.trim();
+        return unreadCountCache.get(userId, t).orElseGet(() -> {
+            long count = repository.countByUserIdAndTypeAndReadAtIsNull(userId, t);
+            unreadCountCache.set(userId, t, count);
+            return count;
+        });
     }
 
     @Override
@@ -175,6 +189,7 @@ public class NotificationServiceImpl implements NotificationService {
         if (n.getReadAt() == null) {
             n.setReadAt(Instant.now());
             n = repository.save(n);
+            unreadCountCache.decrement(userId, n.getType());
         }
         return toResponse(n);
     }
@@ -190,6 +205,7 @@ public class NotificationServiceImpl implements NotificationService {
             count++;
         }
         repository.saveAll(page);
+        unreadCountCache.invalidateAll(userId);
         return count;
     }
 
@@ -198,7 +214,10 @@ public class NotificationServiceImpl implements NotificationService {
     public int markReadMatching(UUID userId, String type, String actorUsername) {
         String t = type == null || type.isBlank() ? null : type.trim();
         String actor = actorUsername == null || actorUsername.isBlank() ? null : actorUsername.trim();
-        return repository.markReadMatching(userId, t, actor, Instant.now());
+        int updated = repository.markReadMatching(userId, t, actor, Instant.now());
+        unreadCountCache.invalidate(userId, t);
+        unreadCountCache.invalidateAll(userId);
+        return updated;
     }
 
     private NotificationResponse toResponse(Notification n) {

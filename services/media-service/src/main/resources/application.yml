@@ -36,6 +36,15 @@ app:
     enabled: ${RATE_LIMIT_ENABLED:true}
     requests-per-minute: ${RATE_LIMIT_RPM:180}
   upload-dir: ${MEDIA_UPLOAD_DIR:./uploads}
+  # local (Docker volume) or s3 (MinIO / R2 / AWS)
+  media-storage: ${MEDIA_STORAGE:local}
+  s3:
+    endpoint: ${S3_ENDPOINT:}
+    region: ${S3_REGION:us-east-1}
+    bucket: ${S3_BUCKET:threadly-media}
+    access-key: ${S3_ACCESS_KEY:}
+    secret-key: ${S3_SECRET_KEY:}
+    path-style: ${S3_PATH_STYLE:true}
   # Free local volume caps (bytes). Tune via env without code changes.
   max-file-bytes: ${MEDIA_MAX_FILE_BYTES:52428800}
   max-image-bytes: ${MEDIA_MAX_IMAGE_BYTES:5242880}

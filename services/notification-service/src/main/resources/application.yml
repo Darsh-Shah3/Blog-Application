@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: notification-service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:notification_db}
     username: ${POSTGRES_USER:threadly}
@@ -38,6 +43,10 @@ management:
 app:
   jwt:
     secret: ${JWT_SECRET:ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
+  redis:
+    enabled: ${REDIS_ENABLED:false}
+  cache:
+    redis-enabled: ${CACHE_REDIS_ENABLED:${REDIS_ENABLED:false}}
   internal-api-key: ${INTERNAL_API_KEY:threadly-internal-dev-key}
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}

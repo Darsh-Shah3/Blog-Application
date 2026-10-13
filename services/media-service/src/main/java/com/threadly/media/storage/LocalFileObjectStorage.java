@@ -8,6 +8,7 @@ import com.threadly.media.port.ObjectStorage;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpStatus;
@@ -26,8 +27,10 @@ import java.util.UUID;
 /**
  * Free default storage: Docker named volume / local folder.
  * No third-party cloud account required.
+ * Active when {@code app.media-storage=local} (default).
  */
 @Component
+@ConditionalOnProperty(name = "app.media-storage", havingValue = "local", matchIfMissing = true)
 public class LocalFileObjectStorage implements ObjectStorage {
 
     private static final Logger log = LoggerFactory.getLogger(LocalFileObjectStorage.class);

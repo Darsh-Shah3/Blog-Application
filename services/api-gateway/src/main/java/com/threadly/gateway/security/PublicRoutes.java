@@ -35,9 +35,8 @@ public final class PublicRoutes {
         if (path.startsWith("/ws/") || path.equals("/ws")) {
             return true;
         }
-        if (path.startsWith("/actuator/health")
-                || path.startsWith("/actuator/prometheus")
-                || path.startsWith("/actuator/info")) {
+        // Prod-safe: only health is unauthenticated at the edge (prometheus scraped on Docker network)
+        if (path.equals("/actuator/health") || path.startsWith("/actuator/health/")) {
             return true;
         }
 

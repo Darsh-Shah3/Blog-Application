@@ -1,6 +1,8 @@
 # Threadly
 
-Reddit-style community platform built as **Java Spring Boot microservices** with a **Next.js + TypeScript** frontend, **PostgreSQL** (database-per-service), **Flyway** migrations, **Docker Compose**, **Prometheus**, and **Grafana**.
+[![CI](https://github.com/Darsh-Shah3/Blog-Application/actions/workflows/ci.yml/badge.svg)](https://github.com/Darsh-Shah3/Blog-Application/actions/workflows/ci.yml)
+
+Reddit-style community platform built as **Java Spring Boot microservices** with a **Next.js + TypeScript** frontend, **PostgreSQL** (database-per-service), **Flyway** migrations, **Docker Compose**, **Redis**, **Kubernetes** manifests, **Prometheus**, and **Grafana**.
 
 > **Threadly** — communities, posts, nested comments, voting, karma, follows, notifications, media uploads, and admin tooling.
 
@@ -57,18 +59,26 @@ cp .env.example .env
 docker compose up --build
 ```
 
+Prod-like (host publishes only frontend `:3000` + gateway `:8080`; Swagger off; Compose ≥ 2.24):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+See [docs/security.md](docs/security.md) and [docs/deploy.md](docs/deploy.md) for CORS, secrets, bootstrap, and actuator guidance.
+
 | Surface | URL |
 |---|---|
 | Frontend | http://localhost:3000 |
 | API gateway | http://localhost:8080 |
-| Auth Swagger | http://localhost:8081/swagger-ui.html |
+| Auth Swagger | http://localhost:8081/swagger-ui.html (local debug only; disabled under `prod`) |
 | pgAdmin | http://localhost:5050 |
 | Prometheus | http://localhost:9090 |
 | Grafana | http://localhost:3001 (`admin` / `admin` by default) |
 
 First start can take several minutes while Maven downloads dependencies inside image builds.
 
-Bootstrap admin (if free): username `admin` / password `Admin@12345` — override via `.env` (`BOOTSTRAP_ADMIN_*`).
+Bootstrap admin (if free): username `admin` / password from `BOOTSTRAP_ADMIN_*` in `.env`. Prod-like Compose sets `BOOTSTRAP_ADMIN_ENABLED=false` — enable once on an empty DB if needed, then disable.
 
 ## Frontend routes
 
@@ -129,6 +139,7 @@ scripts/                    # seed-demo, run-tests
 legacy/                     # historical monolith reference (not used by Compose)
 .env.example
 docker-compose.yml
+docker-compose.prod.yml      # prod-like port surface + prod profile
 ```
 
 ## Configuration
@@ -140,6 +151,7 @@ Copy `.env.example` → `.env`. Important variables:
 | Postgres | `POSTGRES_USER`, `POSTGRES_PASSWORD` |
 | JWT | `JWT_SECRET` (≥ 32 chars), `JWT_EXPIRATION_MS` |
 | Internal calls | `INTERNAL_API_KEY` |
+| CORS | `CORS_ALLOWED_ORIGINS` (gateway + community WS) |
 | Rate limits | `RATE_LIMIT_*` |
 | Bootstrap admin | `BOOTSTRAP_ADMIN_*` |
 | Media caps | `MEDIA_MAX_*` |
@@ -183,11 +195,15 @@ Point services at local Postgres hosts/DBs as in `.env.example`.
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | Request path, votes/karma, observability |
 | [docs/api-overview.md](docs/api-overview.md) | HTTP API map |
-| [docs/security.md](docs/security.md) | JWT, RBAC, rate limits, headers |
+| [docs/security.md](docs/security.md) | JWT, RBAC, rate limits, prod surface / CORS / actuator |
 | [docs/media-storage.md](docs/media-storage.md) | Upload limits and storage |
 | [docs/notifications-audit-follows.md](docs/notifications-audit-follows.md) | Follows, inbox, audit, reports |
 | [docs/coding-conventions.md](docs/coding-conventions.md) | Layered style (controller → service → ports) |
-| [docs/deploy.md](docs/deploy.md) | Free / single-VM Compose, optional Vercel frontend |
+| [docs/deploy.md](docs/deploy.md) | Local vs prod-like Compose, free VM, optional Vercel |
+| [docs/production-readiness-checklist.md](docs/production-readiness-checklist.md) | Living prod hardening checklist |
+| [docs/redis.md](docs/redis.md) | Redis-backed gateway rate limits |
+| [docs/kubernetes.md](docs/kubernetes.md) | Local Kind/K8s + Ingress load balancing |
+| [docs/edge-tls.md](docs/edge-tls.md) | Cloudflare / Nginx TLS + WAF runbook |
 | [docs/optional-services-and-urls.md](docs/optional-services-and-urls.md) | Toggle CAPTCHA / OAuth / SMTP; change public URLs after deploy |
 | [docs/resume-bullets.md](docs/resume-bullets.md) | Resume-ready project bullets |
 
@@ -209,7 +225,7 @@ Point services at local Postgres hosts/DBs as in `.env.example`.
 | Gateway | Spring Cloud Gateway |
 | Services | Spring Boot, Spring Security, WebClient, Flyway, JPA |
 | Data | PostgreSQL 16 |
-| Ops | Docker Compose, Prometheus, Grafana, pgAdmin |
+| Ops | Docker Compose, Redis, Kubernetes manifests, GitHub Actions CI, Prometheus, Grafana, pgAdmin |
 
 ## License / status
 

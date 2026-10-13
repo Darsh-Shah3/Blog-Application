@@ -37,6 +37,10 @@ Each service exposes:
 
 Prometheus scrapes all jobs defined in `infra/prometheus/prometheus.yml`. Grafana provisions Prometheus and a starter dashboard.
 
-## Why not Kafka/K8s yet
+## Ops add-ons (layered without rewriting domains)
 
-Compose + gateway + Flyway + Prometheus already demonstrates production-adjacent microservices practices. Kafka/K8s can be layered later without rewriting domain services.
+- **Redis** — gateway rate limits, JWT blacklist, hot-read caches, unread counters ([redis.md](./redis.md))
+- **Kubernetes** — local manifests + Ingress LB ([kubernetes.md](./kubernetes.md))
+- **Object storage** — `MEDIA_STORAGE=s3` / MinIO ([media-storage.md](./media-storage.md))
+- **CI** — GitHub Actions tests + GHCR push (CD deploy still deferred)
+- **Kafka** — still optional for vote/karma fan-out later

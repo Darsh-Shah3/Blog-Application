@@ -1,5 +1,37 @@
 # Security: JWT, rate limiting, logging
 
+## Production hardening (public surface)
+
+Browsers should reach **only** the frontend (`:3000`) and API gateway (`:8080`). Domain services, Postgres, pgAdmin, Prometheus, and Grafana stay on the Docker network.
+
+| Mode | Command | Host ports |
+|---|---|---|
+| Local debug | `docker compose up --build` | Frontend, gateway, 8081–8088, Postgres, tools |
+| Prod-like | `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build` | Frontend `:3000` + gateway `:8080` only |
+
+Requires **Docker Compose ≥ 2.24** (`ports: !override`). Prod-like sets `SPRING_PROFILES_ACTIVE=prod` and `BOOTSTRAP_ADMIN_ENABLED=false`.
+
+### CORS
+
+`CORS_ALLOWED_ORIGINS` (comma-separated) drives gateway `CorsConfig` and community WebSocket origins. Defaults: `http://localhost:3000,http://127.0.0.1:3000`. Set to your real frontend origin(s) for deploy.
+
+### Swagger & Actuator (prod profile)
+
+- `application-prod.yml` on all Java apps: SpringDoc **disabled**; actuator exposes `health,prometheus` only; health `show-details: never`
+- Gateway `PublicRoutes`: only `/actuator/health` is unauthenticated at the edge (not prometheus/info)
+- Domain `SecurityConfig`: permits health + prometheus (for in-network scrape), not full `/actuator/**`
+- Gateway `SwaggerRedirectConfig` is `@Profile("!prod")`
+
+### Secrets (prod-like / public)
+
+Use strong unique values in `.env` (never commit real secrets):
+
+- `JWT_SECRET` (≥ 32 chars), `INTERNAL_API_KEY`, `POSTGRES_PASSWORD`
+- First admin on an empty auth DB: temporarily `BOOTSTRAP_ADMIN_ENABLED=true`, create the admin, then set **false** again (compose prod override defaults to false)
+
+Redis (rate limits, JWT blacklist, caches): [redis.md](./redis.md).  
+See [deploy.md](./deploy.md) and [production-readiness-checklist.md](./production-readiness-checklist.md).
+
 ## Roles & rights (RBAC)
 
 Threadly uses **role-based access control**. Roles live in `auth_db` and are embedded in JWT:
@@ -21,13 +53,13 @@ Gateway validates JWT and injects `X-User-Id`, `X-Username`, `X-User-Roles`, `X-
 
 ### Bootstrap admin (first start)
 
-If `BOOTSTRAP_ADMIN_ENABLED=true` (default), auth-service creates:
+If `BOOTSTRAP_ADMIN_ENABLED=true` (local `.env` default), auth-service creates:
 
 - username: `admin` (override with `BOOTSTRAP_ADMIN_USERNAME`)
-- password: `Admin@12345` (override with `BOOTSTRAP_ADMIN_PASSWORD`)
+- password: from `BOOTSTRAP_ADMIN_PASSWORD` (local Compose may still use a demo default — override in `.env`)
 - roles: `ROLE_USER` + `ROLE_ADMIN`
 
-Change the password in production and set a strong secret via env.
+Prod-like Compose forces `BOOTSTRAP_ADMIN_ENABLED=false`. On a fresh empty auth DB, enable it once to create the platform admin, then disable again. Always use a strong password and never leave the demo credential on a public host.
 
 ### Admin APIs (require `ROLE_ADMIN`)
 
@@ -39,7 +71,7 @@ Change the password in production and set a strong secret via env.
 | GET | `/api/v1/admin/roles` | Role catalog + permissions |
 | GET | `/api/v1/roles` | Same catalog for any authenticated client |
 
-After role changes, the target user must **log in again** so a new JWT is issued with updated claims.
+After role changes, outstanding JWTs are **revoked in Redis** (`bl:user:{id}`); the target user must **log in again** so a new JWT is issued with updated claims.
 
 ### Password reset (SMTP)
 
@@ -60,7 +92,12 @@ Env keys: `MAIL_ENABLED`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSW
 - Algorithm: **HS256**
 - Shared secret env: `JWT_SECRET` (all services + gateway must match)
 - Client header: `Authorization: Bearer <accessToken>`
-- Token issued by `user-auth-service` on signup/login
+- Token issued by `user-auth-service` on signup/login (includes `jti`)
+- **Logout:** `POST /api/v1/auth/logout` blacklists the current `jti` in Redis (TTL = remaining life)
+- **Revoke-all:** account soft-delete / admin delete / role change sets `bl:user:{userId}`
+- Gateway + community STOMP reject blacklisted tokens; Redis errors **fail open** (site stays up)
+
+Redis-backed gateway rate limits + caches: [redis.md](./redis.md).
 
 ### Public endpoints (no JWT)
 - `POST /api/v1/auth/signup`
@@ -68,7 +105,7 @@ Env keys: `MAIL_ENABLED`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSW
 - `POST /api/v1/auth/forgot-password`
 - `POST /api/v1/auth/reset-password`
 - `OPTIONS /*` (CORS preflight)
-- Actuator health/prometheus (ops)
+- `GET /actuator/health` at the gateway (prometheus stays on the Docker network for scrape)
 
 ### All other business APIs require JWT
 

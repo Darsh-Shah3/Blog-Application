@@ -1,9 +1,13 @@
 # Swagger / API testing (local Docker)
 
-OpenAPI (SpringDoc) is enabled on **each microservice**.  
-The **API gateway (8080) has no Swagger UI** — open the service port directly.
+OpenAPI (SpringDoc) is enabled on **each microservice** when **not** running the `prod` profile.  
+Use this for **local debug** Compose (`docker compose up`), where ports `8081–8088` are published to the host.
 
-## Swagger UI links
+Under **`SPRING_PROFILES_ACTIVE=prod`** (prod-like Compose override), SpringDoc is **disabled** on all nine Java apps (`application-prod.yml`). Swagger UI and `/v3/api-docs` are unavailable in that mode.
+
+The **canonical** API gateway does **not** ship a complete aggregated Swagger UI for day-to-day testing — open each service port directly while debugging. Gateway `SwaggerRedirectConfig` (non-prod only) may redirect `/` to springdoc static assets; that path is incomplete/deferred on the canonical tree and is off under `prod`.
+
+## Swagger UI links (local debug only)
 
 | Service | Port | Swagger UI | OpenAPI JSON |
 |---------|------|------------|--------------|
@@ -16,7 +20,8 @@ The **API gateway (8080) has no Swagger UI** — open the service port directly.
 | audit | 8087 | http://localhost:8087/swagger-ui/index.html | http://localhost:8087/v3/api-docs |
 | notification | 8088 | http://localhost:8088/swagger-ui/index.html | http://localhost:8088/v3/api-docs |
 
-Gateway health only: http://localhost:8080/actuator/health
+Gateway health: http://localhost:8080/actuator/health  
+(Prod-like: only this health URL is public at the edge; service Swagger ports are not published.)
 
 Use **`/swagger-ui/index.html`** (not `/swagger-ui.html` alone — it often 404s or redirects).
 

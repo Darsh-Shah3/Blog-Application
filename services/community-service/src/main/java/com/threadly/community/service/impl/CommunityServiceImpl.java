@@ -1,5 +1,8 @@
 package com.threadly.community.service.impl;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.threadly.community.cache.CachedPage;
+import com.threadly.community.cache.RedisJsonCache;
 import com.threadly.community.dto.CommunityResponse;
 import com.threadly.community.dto.CreateCommunityRequest;
 import com.threadly.community.entity.Community;
@@ -15,6 +18,8 @@ import com.threadly.community.util.SlugGenerator;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -22,6 +27,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -33,11 +39,18 @@ public class CommunityServiceImpl implements CommunityService {
 
     private static final Logger log = LoggerFactory.getLogger(CommunityServiceImpl.class);
     private static final int MAX_PAGE_SIZE = 50;
+    private static final Duration DETAIL_TTL = Duration.ofMinutes(3);
+    private static final Duration DISCOVER_TTL = Duration.ofSeconds(90);
+    private static final Duration LIST_TTL = Duration.ofSeconds(60);
 
     private final CommunityRepository communityRepository;
     private final MembershipRepository membershipRepository;
     private final CommunityMapper communityMapper;
     private final SlugGenerator slugGenerator;
+    private final ObjectProvider<RedisJsonCache> cacheProvider;
+
+    @Value("${app.cache.redis-enabled:false}")
+    private boolean cacheEnabled;
 
     @Override
     @Transactional
@@ -59,6 +72,7 @@ public class CommunityServiceImpl implements CommunityService {
                 .build();
         community = communityRepository.save(community);
         joinInternal(community, userId, by);
+        invalidateListCaches();
         log.info("Community created id={} slug={} creator={}", community.getId(), slug, userId);
         return communityMapper.toResponse(community, true);
     }
@@ -66,27 +80,72 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional(readOnly = true)
     public CommunityResponse getBySlug(String slug, UUID viewerId) {
+        RedisJsonCache cache = cache();
+        if (cache != null) {
+            var hit = cache.get(slugKey(slug), CommunityResponse.class);
+            if (hit.isPresent()) {
+                CommunityResponse cached = hit.get();
+                cached.setJoined(isJoined(cached.getId(), viewerId));
+                return cached;
+            }
+        }
         Community community = communityRepository.findBySlug(slug)
                 .orElseThrow(() -> new ApiException("Community not found", HttpStatus.NOT_FOUND.value()));
-        return communityMapper.toResponse(community, isJoined(community.getId(), viewerId));
+        CommunityResponse shared = communityMapper.toResponse(community, false);
+        if (cache != null) {
+            cache.set(slugKey(slug), shared, DETAIL_TTL);
+            cache.set(idKey(community.getId()), shared, DETAIL_TTL);
+        }
+        shared.setJoined(isJoined(community.getId(), viewerId));
+        return shared;
     }
 
     @Override
     @Transactional(readOnly = true)
     public CommunityResponse getById(UUID id, UUID viewerId) {
+        RedisJsonCache cache = cache();
+        if (cache != null) {
+            var hit = cache.get(idKey(id), CommunityResponse.class);
+            if (hit.isPresent()) {
+                CommunityResponse cached = hit.get();
+                cached.setJoined(isJoined(id, viewerId));
+                return cached;
+            }
+        }
         Community community = communityRepository.findById(id)
                 .orElseThrow(() -> new ApiException("Community not found", HttpStatus.NOT_FOUND.value()));
-        return communityMapper.toResponse(community, isJoined(id, viewerId));
+        CommunityResponse shared = communityMapper.toResponse(community, false);
+        if (cache != null) {
+            cache.set(idKey(id), shared, DETAIL_TTL);
+            if (community.getSlug() != null) {
+                cache.set(slugKey(community.getSlug()), shared, DETAIL_TTL);
+            }
+        }
+        shared.setJoined(isJoined(id, viewerId));
+        return shared;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<CommunityResponse> list(String q, UUID viewerId, Pageable pageable) {
         Pageable page = capped(pageable);
+        String qKey = (q == null || q.isBlank()) ? "" : q.trim().toLowerCase();
+        RedisJsonCache cache = cache();
+        String key = "community:list:v1:" + qKey + ":p" + page.getPageNumber() + ":s" + page.getPageSize();
+        if (cache != null) {
+            var hit = cache.get(key, new TypeReference<CachedPage<CommunityResponse>>() {});
+            if (hit.isPresent()) {
+                return overlayJoined(hit.get().toPage(), viewerId);
+            }
+        }
         Page<Community> result = (q == null || q.isBlank())
                 ? communityRepository.findAll(page)
                 : communityRepository.findByNameContainingIgnoreCase(q.trim(), page);
-        return mapWithJoined(result, viewerId);
+        Page<CommunityResponse> mapped = mapWithJoined(result, null);
+        if (cache != null) {
+            cache.set(key, CachedPage.from(mapped), LIST_TTL);
+        }
+        return overlayJoined(mapped, viewerId);
     }
 
     @Override
@@ -95,7 +154,19 @@ public class CommunityServiceImpl implements CommunityService {
         Pageable page = PageRequest.of(
                 Math.max(pageable.getPageNumber(), 0),
                 Math.min(pageable.getPageSize(), MAX_PAGE_SIZE));
-        return mapWithJoined(communityRepository.findDiscover(page), viewerId);
+        RedisJsonCache cache = cache();
+        String key = "community:discover:v1:p" + page.getPageNumber() + ":s" + page.getPageSize();
+        if (cache != null) {
+            var hit = cache.get(key, new TypeReference<CachedPage<CommunityResponse>>() {});
+            if (hit.isPresent()) {
+                return overlayJoined(hit.get().toPage(), viewerId);
+            }
+        }
+        Page<CommunityResponse> mapped = mapWithJoined(communityRepository.findDiscover(page), null);
+        if (cache != null) {
+            cache.set(key, CachedPage.from(mapped), DISCOVER_TTL);
+        }
+        return overlayJoined(mapped, viewerId);
     }
 
     @Override
@@ -108,6 +179,7 @@ public class CommunityServiceImpl implements CommunityService {
         }
         String by = AuditActors.resolve(username, userId);
         joinInternal(community, userId, by);
+        invalidateCommunity(community);
         return communityMapper.toResponse(community, true);
     }
 
@@ -122,6 +194,7 @@ public class CommunityServiceImpl implements CommunityService {
             community.setUpdatedBy("user-" + userId);
             communityRepository.save(community);
         });
+        invalidateCommunity(community);
         return communityMapper.toResponse(community, false);
     }
 
@@ -157,6 +230,8 @@ public class CommunityServiceImpl implements CommunityService {
         }
         membershipRepository.deleteByCommunityId(communityId);
         communityRepository.delete(community);
+        invalidateCommunity(community);
+        invalidateListCaches();
         log.info("Community deleted id={} by userId={}", communityId, userId);
     }
 
@@ -167,6 +242,17 @@ public class CommunityServiceImpl implements CommunityService {
         List<UUID> ids = page.getContent().stream().map(Community::getId).toList();
         Set<UUID> joined = membershipRepository.findJoinedCommunityIds(viewerId, ids);
         return page.map(c -> communityMapper.toResponse(c, joined.contains(c.getId())));
+    }
+
+    private Page<CommunityResponse> overlayJoined(Page<CommunityResponse> page, UUID viewerId) {
+        if (viewerId == null || page.isEmpty()) {
+            page.forEach(c -> c.setJoined(false));
+            return page;
+        }
+        List<UUID> ids = page.getContent().stream().map(CommunityResponse::getId).toList();
+        Set<UUID> joined = membershipRepository.findJoinedCommunityIds(viewerId, ids);
+        page.forEach(c -> c.setJoined(joined.contains(c.getId())));
+        return page;
     }
 
     private boolean isJoined(UUID communityId, UUID viewerId) {
@@ -186,6 +272,40 @@ public class CommunityServiceImpl implements CommunityService {
         community.setMemberCount(community.getMemberCount() + 1);
         community.setUpdatedBy(username != null ? username : "user-" + userId);
         communityRepository.save(community);
+    }
+
+    private RedisJsonCache cache() {
+        return cacheEnabled ? cacheProvider.getIfAvailable() : null;
+    }
+
+    private void invalidateCommunity(Community community) {
+        RedisJsonCache cache = cache();
+        if (cache == null || community == null) {
+            return;
+        }
+        if (community.getId() != null) {
+            cache.delete(idKey(community.getId()));
+        }
+        if (community.getSlug() != null) {
+            cache.delete(slugKey(community.getSlug()));
+        }
+        invalidateListCaches();
+    }
+
+    private void invalidateListCaches() {
+        RedisJsonCache cache = cache();
+        if (cache != null) {
+            cache.deleteByPrefix("community:list:v1:");
+            cache.deleteByPrefix("community:discover:v1:");
+        }
+    }
+
+    private static String slugKey(String slug) {
+        return "community:slug:v1:" + slug;
+    }
+
+    private static String idKey(UUID id) {
+        return "community:id:v1:" + id;
     }
 
     private static Pageable capped(Pageable pageable) {

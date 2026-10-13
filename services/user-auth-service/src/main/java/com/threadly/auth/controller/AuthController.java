@@ -1,12 +1,16 @@
 package com.threadly.auth.controller;
 
 import com.threadly.auth.dto.*;
+import com.threadly.auth.security.JwtTokenProvider;
 import com.threadly.auth.service.AuthService;
 import com.threadly.auth.service.CaptchaService;
 import com.threadly.auth.service.OAuthService;
 import com.threadly.auth.service.PasswordResetService;
+import com.threadly.auth.service.TokenBlacklistService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -23,6 +27,8 @@ public class AuthController {
     private final PasswordResetService passwordResetService;
     private final OAuthService oAuthService;
     private final CaptchaService captchaService;
+    private final JwtTokenProvider jwtTokenProvider;
+    private final TokenBlacklistService tokenBlacklistService;
 
     /** Public: whether signup CAPTCHA is required + site key for the widget. */
     @GetMapping("/captcha-config")
@@ -77,6 +83,20 @@ public class AuthController {
     public ResponseEntity<UserResponse> session(Authentication authentication) {
         UUID userId = UUID.fromString(authentication.getName());
         return ResponseEntity.ok(authService.getById(userId));
+    }
+
+    /** Blacklists the current JWT so it cannot be reused until expiry. */
+    @PostMapping("/logout")
+    public ResponseEntity<MessageResponse> logout(HttpServletRequest request) {
+        String auth = request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (auth != null && auth.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            String token = auth.substring(7).trim();
+            if (!token.isEmpty() && jwtTokenProvider.isValid(token)) {
+                String jti = jwtTokenProvider.extractJti(token);
+                tokenBlacklistService.revokeToken(jti, jwtTokenProvider.remainingTtl(token));
+            }
+        }
+        return ResponseEntity.ok(MessageResponse.builder().message("Logged out").build());
     }
 
     @PutMapping("/profile")

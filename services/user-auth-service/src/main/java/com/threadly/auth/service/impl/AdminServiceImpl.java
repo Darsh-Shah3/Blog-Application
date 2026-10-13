@@ -11,10 +11,14 @@ import com.threadly.auth.rbac.AppRole;
 import com.threadly.auth.rbac.RbacCatalog;
 import com.threadly.auth.repository.RoleRepository;
 import com.threadly.auth.repository.UserRepository;
+import com.threadly.auth.cache.RedisJsonCache;
 import com.threadly.auth.service.AdminService;
 import com.threadly.auth.service.MailService;
+import com.threadly.auth.service.TokenBlacklistService;
 import com.threadly.auth.util.AuditActors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -41,6 +45,11 @@ public class AdminServiceImpl implements AdminService {
     private final RoleRepository roleRepository;
     private final UserMapper userMapper;
     private final MailService mailService;
+    private final TokenBlacklistService tokenBlacklistService;
+    private final ObjectProvider<RedisJsonCache> cacheProvider;
+
+    @Value("${app.cache.redis-enabled:false}")
+    private boolean cacheEnabled;
 
     @Override
     @Transactional(readOnly = true)
@@ -91,6 +100,17 @@ public class AdminServiceImpl implements AdminService {
         user.replaceRoles(roles);
         user.setUpdatedBy(AuditActors.resolve(actorUsername, actorId));
         user = userRepository.save(user);
+        // Force re-login so JWT claims pick up new roles/permissions
+        tokenBlacklistService.revokeAllForUser(userId);
+        if (cacheEnabled) {
+            RedisJsonCache cache = cacheProvider.getIfAvailable();
+            if (cache != null) {
+                cache.delete("user:profile:v1:id:" + userId);
+                if (user.getUsername() != null) {
+                    cache.delete("user:profile:v1:u:" + user.getUsername().toLowerCase(Locale.ROOT));
+                }
+            }
+        }
         log.info("Roles updated userId={} actorId={} actor={} roles={}", userId, actorId, user.getUpdatedBy(), wanted);
         return userMapper.toResponse(user);
     }
@@ -115,6 +135,16 @@ public class AdminServiceImpl implements AdminService {
         user.setDeletedAt(Instant.now());
         user.setUpdatedBy(actor);
         userRepository.save(user);
+        tokenBlacklistService.revokeAllForUser(userId);
+        if (cacheEnabled) {
+            RedisJsonCache cache = cacheProvider.getIfAvailable();
+            if (cache != null) {
+                cache.delete("user:profile:v1:id:" + userId);
+                if (uname != null) {
+                    cache.delete("user:profile:v1:u:" + uname.toLowerCase(Locale.ROOT));
+                }
+            }
+        }
         log.info("User soft-deleted id={} username={} by actor={}", userId, uname, actor);
         // Best-effort SMTP notice — posts/messages are kept; login disabled
         if (email != null && !email.isBlank()) {

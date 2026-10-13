@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: user-auth-service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:auth_db}
     username: ${POSTGRES_USER:threadly}
@@ -47,6 +52,12 @@ app:
   jwt:
     secret: ${JWT_SECRET:ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  redis:
+    enabled: ${REDIS_ENABLED:false}
+  token-blacklist:
+    enabled: ${TOKEN_BLACKLIST_ENABLED:${REDIS_ENABLED:false}}
+  cache:
+    redis-enabled: ${CACHE_REDIS_ENABLED:${REDIS_ENABLED:false}}
   internal-api-key: ${INTERNAL_API_KEY:threadly-internal-dev-key}
   bootstrap-admin:
     enabled: ${BOOTSTRAP_ADMIN_ENABLED:true}

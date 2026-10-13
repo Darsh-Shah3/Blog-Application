@@ -1,6 +1,9 @@
 package com.threadly.post.service.impl;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.threadly.post.cache.CachedPage;
+import com.threadly.post.cache.RedisJsonCache;
 import com.threadly.post.dto.CreatePostRequest;
 import com.threadly.post.dto.PostResponse;
 import com.threadly.post.entity.Post;
@@ -23,6 +26,8 @@ import com.threadly.post.util.PgUuidArray;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -31,6 +36,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -46,6 +52,7 @@ public class PostServiceImpl implements PostService {
     private static final Logger log = LoggerFactory.getLogger(PostServiceImpl.class);
     private static final int MAX_PAGE_SIZE = 50;
     private static final int TRENDING_HOURS = 48;
+    private static final Duration DETAIL_TTL = Duration.ofSeconds(90);
 
     private final PostRepository postRepository;
     private final CommunityPort communityPort;
@@ -54,6 +61,10 @@ public class PostServiceImpl implements PostService {
     private final AuditPort auditPort;
     private final NotificationPort notificationPort;
     private final ObjectMapper objectMapper;
+    private final ObjectProvider<RedisJsonCache> cacheProvider;
+
+    @Value("${app.cache.redis-enabled:false}")
+    private boolean cacheEnabled;
 
     @Override
     @Transactional
@@ -125,6 +136,7 @@ public class PostServiceImpl implements PostService {
             String mediaUrl = media.stream().map(MediaRef::getUrl).filter(u -> u != null && !u.isBlank()).findFirst().orElse(null);
             notificationPort.notifyPostCreated(authorId, by, post.getId(), post.getTitle(), community.slug(),
                     request.getNotificationSummary(), mediaUrl);
+            invalidateFeedCaches();
         }
         return postMapper.toResponse(post);
     }
@@ -132,7 +144,18 @@ public class PostServiceImpl implements PostService {
     @Override
     @Transactional(readOnly = true)
     public PostResponse get(UUID id) {
-        return postMapper.toResponse(find(id));
+        RedisJsonCache cache = cache();
+        if (cache != null) {
+            var hit = cache.get(detailKey(id), PostResponse.class);
+            if (hit.isPresent()) {
+                return hit.get();
+            }
+        }
+        PostResponse response = postMapper.toResponse(find(id));
+        if (cache != null) {
+            cache.set(detailKey(id), response, DETAIL_TTL);
+        }
+        return response;
     }
 
     @Override
@@ -145,7 +168,18 @@ public class PostServiceImpl implements PostService {
             return mapPage(search(q.trim(), applySort(mode, page)));
         }
 
-        return switch (mode) {
+        boolean cacheable = isAnonymousStyleFeed(mode, communityId, authorId, userId);
+        RedisJsonCache cache = cache();
+        String feedKey = null;
+        if (cacheable && cache != null) {
+            feedKey = feedKey(mode, communityId, authorId, page);
+            var hit = cache.get(feedKey, new TypeReference<CachedPage<PostResponse>>() {});
+            if (hit.isPresent()) {
+                return hit.get().toPage();
+            }
+        }
+
+        Page<PostResponse> result = switch (mode) {
             case "for_you", "foryou", "recommended" -> mapPage(forYou(userId, page));
             case "trending" -> mapPage(trending(communityId, userId, page));
             case "hot" -> mapPage(hotFeed(communityId, authorId, userId, page));
@@ -154,6 +188,11 @@ public class PostServiceImpl implements PostService {
             default -> mapPage(plainFeed(communityId, authorId, userId,
                     applySort("new", page)));
         };
+
+        if (feedKey != null && cache != null) {
+            cache.set(feedKey, CachedPage.from(result), feedTtl(mode));
+        }
+        return result;
     }
 
     @Override
@@ -179,6 +218,11 @@ public class PostServiceImpl implements PostService {
         postRepository.delete(post);
         auditPort.record("DELETE", "POST", id.toString(), userId, null,
                 "Post deleted id=" + id, before, null);
+        invalidateFeedCaches();
+        RedisJsonCache cache = cache();
+        if (cache != null) {
+            cache.delete(detailKey(id));
+        }
         log.info("Post deleted id={} by userId={} moderated={}", id, userId, !owner);
     }
 
@@ -326,6 +370,49 @@ public class PostServiceImpl implements PostService {
             return objectMapper.writeValueAsString(o);
         } catch (Exception e) {
             return String.valueOf(o);
+        }
+    }
+
+    private RedisJsonCache cache() {
+        return cacheEnabled ? cacheProvider.getIfAvailable() : null;
+    }
+
+    /** Cache only global / community / author feeds — not membership-scoped or for_you. */
+    private static boolean isAnonymousStyleFeed(String mode, UUID communityId, UUID authorId, UUID userId) {
+        if ("for_you".equals(mode) || "foryou".equals(mode) || "recommended".equals(mode)) {
+            return false;
+        }
+        if (communityId != null || authorId != null) {
+            return true;
+        }
+        // Global hot/new/top/trending without personalization
+        return userId == null;
+    }
+
+    private static Duration feedTtl(String mode) {
+        return switch (mode) {
+            case "hot", "trending" -> Duration.ofSeconds(45);
+            case "top" -> Duration.ofSeconds(90);
+            default -> Duration.ofSeconds(20);
+        };
+    }
+
+    private static String feedKey(String sort, UUID communityId, UUID authorId, Pageable page) {
+        return "post:feed:v1:" + sort
+                + ":" + (communityId == null ? "a" : communityId)
+                + ":" + (authorId == null ? "a" : authorId)
+                + ":p" + page.getPageNumber()
+                + ":s" + page.getPageSize();
+    }
+
+    private static String detailKey(UUID id) {
+        return "post:detail:v1:" + id;
+    }
+
+    private void invalidateFeedCaches() {
+        RedisJsonCache cache = cache();
+        if (cache != null) {
+            cache.deleteByPrefix("post:feed:v1:");
         }
     }
 }

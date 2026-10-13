@@ -1,4 +1,21 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: threadly-redis
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-threadly_redis}"]
+    # Local debug only — prod override unpublishes this port.
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-threadly_redis}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - threadly
+
   postgres:
     image: postgres:16-alpine
     container_name: threadly-postgres
@@ -50,6 +67,12 @@ services:
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
       RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-120}
       RATE_LIMIT_AUTH_RPM: ${RATE_LIMIT_AUTH_RPM:-20}
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
+      CACHE_REDIS_ENABLED: ${CACHE_REDIS_ENABLED:-true}
+      TOKEN_BLACKLIST_ENABLED: ${TOKEN_BLACKLIST_ENABLED:-true}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-threadly_redis}
       BOOTSTRAP_ADMIN_ENABLED: ${BOOTSTRAP_ADMIN_ENABLED:-true}
       BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-admin}
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@threadly.local}
@@ -76,6 +99,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health || exit 1"]
       interval: 20s
@@ -99,12 +124,20 @@ services:
       JWT_SECRET: ${JWT_SECRET:-ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
       RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-180}
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
+      CACHE_REDIS_ENABLED: ${CACHE_REDIS_ENABLED:-true}
+      TOKEN_BLACKLIST_ENABLED: ${TOKEN_BLACKLIST_ENABLED:-true}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-threadly_redis}
       NOTIFICATION_SERVICE_URL: http://notification-service:8088
       JAVA_OPTS: "-Xmx256m -Xms128m"
     ports:
       - "${COMMUNITY_PORT:-8082}:8082"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       notification-service:
         condition: service_healthy
@@ -131,6 +164,11 @@ services:
       JWT_SECRET: ${JWT_SECRET:-ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
       RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-180}
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
+      CACHE_REDIS_ENABLED: ${CACHE_REDIS_ENABLED:-true}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-threadly_redis}
       COMMUNITY_SERVICE_URL: http://community-service:8082
       AUTH_SERVICE_URL: http://user-auth-service:8081
       AUDIT_SERVICE_URL: http://audit-service:8087
@@ -139,6 +177,8 @@ services:
     ports:
       - "${POST_PORT:-8083}:8083"
     depends_on:
+      redis:
+        condition: service_healthy
       community-service:
         condition: service_healthy
       user-auth-service:
@@ -217,6 +257,22 @@ services:
     networks:
       - threadly
 
+  minio:
+    profiles: ["minio"]
+    image: minio/minio:RELEASE.2024-04-18T19-09-19Z
+    container_name: threadly-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - threadly
+
   media-service:
     build: ./services/media-service
     container_name: threadly-media
@@ -228,6 +284,13 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-threadly}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-threadly_secret}
       MEDIA_UPLOAD_DIR: /app/uploads
+      MEDIA_STORAGE: ${MEDIA_STORAGE:-local}
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-threadly-media}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
+      S3_PATH_STYLE: ${S3_PATH_STYLE:-true}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-threadly-internal-svc-key-9f3c8a2b}
       JWT_SECRET: ${JWT_SECRET:-ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
@@ -297,6 +360,11 @@ services:
       JWT_SECRET: ${JWT_SECRET:-ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
       RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-180}
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
+      CACHE_REDIS_ENABLED: ${CACHE_REDIS_ENABLED:-true}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-threadly_redis}
       AUTH_SERVICE_URL: http://user-auth-service:8081
       MAIL_ENABLED: ${MAIL_ENABLED:-false}
       MAIL_HOST: ${MAIL_HOST:-}
@@ -312,6 +380,8 @@ services:
       - "${NOTIFICATION_PORT:-8088}:8088"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       user-auth-service:
         condition: service_healthy
@@ -332,8 +402,15 @@ services:
       JWT_SECRET: ${JWT_SECRET:-ThR3@dly-Jwt-Hs256-Secret-Key-2026-Industry-Grade-9f3c8a2b7e1d}
       REQUIRE_JWT_FOR_ALL_APIS: ${REQUIRE_JWT_FOR_ALL_APIS:-true}
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_REDIS_ENABLED: ${RATE_LIMIT_REDIS_ENABLED:-true}
       RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-120}
       RATE_LIMIT_AUTH_RPM: ${RATE_LIMIT_AUTH_RPM:-20}
+      REDIS_ENABLED: ${REDIS_ENABLED:-true}
+      TOKEN_BLACKLIST_ENABLED: ${TOKEN_BLACKLIST_ENABLED:-true}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-threadly_redis}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       AUTH_SERVICE_URL: http://user-auth-service:8081
       COMMUNITY_SERVICE_URL: http://community-service:8082
       POST_SERVICE_URL: http://post-service:8083
@@ -346,6 +423,8 @@ services:
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
     depends_on:
+      redis:
+        condition: service_healthy
       user-auth-service:
         condition: service_healthy
       community-service:
@@ -426,6 +505,8 @@ services:
 volumes:
   postgres_data:
   media_data:
+  redis_data:
+  minio_data:
   prometheus_data:
   grafana_data:
 

@@ -1,0 +1,485 @@
+# Domain microservices (1 replica each). Images: threadly/<name>:local (Kind load).
+# Shared env from ConfigMap + Secret.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-auth-service
+  namespace: threadly
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-auth-service
+  template:
+    metadata:
+      labels:
+        app: user-auth-service
+    spec:
+      containers:
+        - name: app
+          image: threadly/user-auth-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8081
+          envFrom:
+            - configMapRef:
+                name: threadly-config
+            - secretRef:
+                name: threadly-secrets
+          env:
+            - name: SERVER_PORT
+              value: "8081"
+            - name: POSTGRES_DB
+              value: auth_db
+            - name: JAVA_OPTS
+              value: "-Xmx256m -Xms128m"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-auth-service
+  namespace: threadly
+spec:
+  selector:
+    app: user-auth-service
+  ports:
+    - port: 8081
+      targetPort: 8081
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: community-service
+  namespace: threadly
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: community-service
+  template:
+    metadata:
+      labels:
+        app: community-service
+    spec:
+      containers:
+        - name: app
+          image: threadly/community-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8082
+          envFrom:
+            - configMapRef:
+                name: threadly-config
+            - secretRef:
+                name: threadly-secrets
+          env:
+            - name: SERVER_PORT
+              value: "8082"
+            - name: POSTGRES_DB
+              value: community_db
+            - name: JAVA_OPTS
+              value: "-Xmx256m -Xms128m"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: community-service
+  namespace: threadly
+spec:
+  selector:
+    app: community-service
+  ports:
+    - port: 8082
+      targetPort: 8082
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: post-service
+  namespace: threadly
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: post-service
+  template:
+    metadata:
+      labels:
+        app: post-service
+    spec:
+      containers:
+        - name: app
+          image: threadly/post-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8083
+          envFrom:
+            - configMapRef:
+                name: threadly-config
+            - secretRef:
+                name: threadly-secrets
+          env:
+            - name: SERVER_PORT
+              value: "8083"
+            - name: POSTGRES_DB
+              value: post_db
+            - name: JAVA_OPTS
+              value: "-Xmx256m -Xms128m"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8083
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: post-service
+  namespace: threadly
+spec:
+  selector:
+    app: post-service
+  ports:
+    - port: 8083
+      targetPort: 8083
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: comment-service
+  namespace: threadly
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: comment-service
+  template:
+    metadata:
+      labels:
+        app: comment-service
+    spec:
+      containers:
+        - name: app
+          image: threadly/comment-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8084
+          envFrom:
+            - configMapRef:
+                name: threadly-config
+            - secretRef:
+                name: threadly-secrets
+          env:
+            - name: SERVER_PORT
+              value: "8084"
+            - name: POSTGRES_DB
+              value: comment_db
+            - name: JAVA_OPTS
+              value: "-Xmx256m -Xms128m"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8084
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: comment-service
+  namespace: threadly
+spec:
+  selector:
+    app: comment-service
+  ports:
+    - port: 8084
+      targetPort: 8084
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vote-service
+  namespace: threadly
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vote-service
+  template:
+    metadata:
+      labels:
+        app: vote-service
+    spec:
+      containers:
+        - name: app
+          image: threadly/vote-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8085
+          envFrom:
+            - configMapRef:
+                name: threadly-config
+            - secretRef:
+                name: threadly-secrets
+          env:
+            - name: SERVER_PORT
+              value: "8085"
+            - name: POSTGRES_DB
+              value: vote_db
+            - name: JAVA_OPTS
+              value: "-Xmx256m -Xms128m"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8085
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vote-service
+  namespace: threadly
+spec:
+  selector:
+    app: vote-service
+  ports:
+    - port: 8085
+      targetPort: 8085
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: media-service
+  namespace: threadly
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: media-service
+  template:
+    metadata:
+      labels:
+        app: media-service
+    spec:
+      containers:
+        - name: app
+          image: threadly/media-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8086
+          envFrom:
+            - configMapRef:
+                name: threadly-config
+            - secretRef:
+                name: threadly-secrets
+          env:
+            - name: SERVER_PORT
+              value: "8086"
+            - name: POSTGRES_DB
+              value: media_db
+            - name: JAVA_OPTS
+              value: "-Xmx256m -Xms128m"
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8086
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: uploads
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: media-service
+  namespace: threadly
+spec:
+  selector:
+    app: media-service
+  ports:
+    - port: 8086
+      targetPort: 8086
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audit-service
+  namespace: threadly
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: audit-service
+  template:
+    metadata:
+      labels:
+        app: audit-service
+    spec:
+      containers:
+        - name: app
+          image: threadly/audit-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8087
+          envFrom:
+            - configMapRef:
+                name: threadly-config
+            - secretRef:
+                name: threadly-secrets
+          env:
+            - name: SERVER_PORT
+              value: "8087"
+            - name: POSTGRES_DB
+              value: audit_db
+            - name: JAVA_OPTS
+              value: "-Xmx256m -Xms128m"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8087
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: audit-service
+  namespace: threadly
+spec:
+  selector:
+    app: audit-service
+  ports:
+    - port: 8087
+      targetPort: 8087
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  namespace: threadly
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+    spec:
+      containers:
+        - name: app
+          image: threadly/notification-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8088
+          envFrom:
+            - configMapRef:
+                name: threadly-config
+            - secretRef:
+                name: threadly-secrets
+          env:
+            - name: SERVER_PORT
+              value: "8088"
+            - name: POSTGRES_DB
+              value: notification_db
+            - name: JAVA_OPTS
+              value: "-Xmx256m -Xms128m"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8088
+            initialDelaySeconds: 40
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  namespace: threadly
+spec:
+  selector:
+    app: notification-service
+  ports:
+    - port: 8088
+      targetPort: 8088

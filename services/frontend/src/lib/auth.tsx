@@ -11,7 +11,7 @@ type AuthContextValue = {
   register: (username: string, email: string, password: string, captchaToken?: string) => Promise<void>;
   /** Store JWT + user from OAuth (or any AuthResponse). */
   applySession: (res: AuthResponse) => void;
-  logout: () => void;
+  logout: () => void | Promise<void>;
   refreshMe: () => Promise<void>;
 };
 
@@ -72,7 +72,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     applySession(res) {
       applyAuth(res);
     },
-    logout() {
+    async logout() {
+      const current = typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : token;
+      if (current) {
+        try {
+          await api('/api/v1/auth/logout', { method: 'POST' }, current);
+        } catch {
+          // Best-effort revoke; always clear local session
+        }
+      }
       localStorage.removeItem(TOKEN_KEY);
       setToken(null);
       setUser(null);

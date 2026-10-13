@@ -11,10 +11,12 @@ import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * HS256 JWT adapter. Secret/TTL come from configuration so secrets stay out of code.
@@ -36,7 +38,9 @@ public class JjwtTokenProvider implements JwtTokenProvider {
     public String generateToken(java.util.UUID userId, String username, List<String> roles, List<String> permissions) {
         Date now = new Date();
         Date exp = new Date(now.getTime() + expirationMs);
+        String jti = UUID.randomUUID().toString();
         return Jwts.builder()
+                .setId(jti)
                 .setSubject(userId.toString())
                 .setIssuedAt(now)
                 .setExpiration(exp)
@@ -52,7 +56,7 @@ public class JjwtTokenProvider implements JwtTokenProvider {
     @Override
     public boolean isValid(String token) {
         try {
-            parse(token);
+            parseClaims(token);
             return true;
         } catch (Exception ex) {
             log.debug("JWT invalid: {}", ex.getMessage());
@@ -62,18 +66,18 @@ public class JjwtTokenProvider implements JwtTokenProvider {
 
     @Override
     public String extractUserId(String token) {
-        return parse(token).getSubject();
+        return parseClaims(token).getSubject();
     }
 
     @Override
     public String extractUsername(String token) {
-        return parse(token).get("username", String.class);
+        return parseClaims(token).get("username", String.class);
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public List<String> extractRoles(String token) {
-        Object roles = parse(token).get("roles");
+        Object roles = parseClaims(token).get("roles");
         if (roles instanceof List<?> list) {
             return list.stream().map(String::valueOf).toList();
         }
@@ -83,18 +87,34 @@ public class JjwtTokenProvider implements JwtTokenProvider {
     @Override
     @SuppressWarnings("unchecked")
     public List<String> extractPermissions(String token) {
-        Object permissions = parse(token).get("permissions");
+        Object permissions = parseClaims(token).get("permissions");
         if (permissions instanceof List<?> list) {
             return list.stream().map(String::valueOf).toList();
         }
         return Collections.emptyList();
     }
 
-    private Claims parse(String token) {
+    @Override
+    public Claims parseClaims(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(key)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
+    }
+
+    @Override
+    public String extractJti(String token) {
+        return parseClaims(token).getId();
+    }
+
+    @Override
+    public Duration remainingTtl(String token) {
+        Date exp = parseClaims(token).getExpiration();
+        if (exp == null) {
+            return Duration.ofMillis(expirationMs);
+        }
+        long ms = exp.getTime() - System.currentTimeMillis();
+        return ms > 0 ? Duration.ofMillis(ms) : Duration.ZERO;
     }
 }

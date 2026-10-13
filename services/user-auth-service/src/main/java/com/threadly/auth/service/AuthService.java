@@ -17,6 +17,9 @@ public interface AuthService {
 
     UserResponse getById(UUID id);
 
+    /** Public profile card (email stripped); Redis-cached when enabled. */
+    UserResponse getPublicById(UUID id);
+
     UserResponse getByUsername(String username);
 
     UserResponse updateProfile(UUID userId, UpdateProfileRequest request);

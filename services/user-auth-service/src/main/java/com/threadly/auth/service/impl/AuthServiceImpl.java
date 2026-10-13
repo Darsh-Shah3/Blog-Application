@@ -10,13 +10,17 @@ import com.threadly.auth.rbac.RbacCatalog;
 import com.threadly.auth.repository.RoleRepository;
 import com.threadly.auth.repository.UserFollowRepository;
 import com.threadly.auth.repository.UserRepository;
+import com.threadly.auth.cache.RedisJsonCache;
 import com.threadly.auth.security.JwtTokenProvider;
 import com.threadly.auth.service.AuthService;
 import com.threadly.auth.service.CaptchaService;
+import com.threadly.auth.service.TokenBlacklistService;
 import com.threadly.auth.util.AuditActors;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -24,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.UUID;
@@ -33,6 +38,7 @@ import java.util.UUID;
 public class AuthServiceImpl implements AuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthServiceImpl.class);
+    private static final Duration PROFILE_TTL = Duration.ofMinutes(3);
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -41,6 +47,11 @@ public class AuthServiceImpl implements AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final UserMapper userMapper;
     private final CaptchaService captchaService;
+    private final TokenBlacklistService tokenBlacklistService;
+    private final ObjectProvider<RedisJsonCache> cacheProvider;
+
+    @Value("${app.cache.redis-enabled:false}")
+    private boolean cacheEnabled;
 
     @Override
     @Transactional
@@ -171,17 +182,43 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional(readOnly = true)
+    public UserResponse getPublicById(UUID id) {
+        RedisJsonCache cache = cache();
+        if (cache != null) {
+            var hit = cache.get(profileIdKey(id), UserResponse.class);
+            if (hit.isPresent()) {
+                return hit.get();
+            }
+        }
+        UserResponse response = publicCard(userMapper.toResponse(findActiveUser(id)));
+        putProfileCache(response);
+        return response;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public UserResponse getByUsername(String username) {
         log.debug("Get user by username={}", username);
         String key = username == null ? "" : username.trim().toLowerCase();
-        return userRepository.findActiveByUsername(key)
+        RedisJsonCache cache = cache();
+        if (cache != null && !key.isBlank()) {
+            var hit = cache.get(profileUsernameKey(key), UserResponse.class);
+            if (hit.isPresent()) {
+                return hit.get();
+            }
+        }
+        UserResponse response = userRepository.findActiveByUsername(key)
                 .map(userMapper::toResponse)
+                .map(this::publicCard)
                 .orElseGet(() -> userRepository
                         .findDeletedByUsername(key, org.springframework.data.domain.PageRequest.of(0, 1))
                         .stream()
                         .findFirst()
                         .map(userMapper::toDeletedPublicCard)
+                        .map(this::publicCard)
                         .orElseThrow(() -> new ApiException("User not found", HttpStatus.NOT_FOUND.value())));
+        putProfileCache(response);
+        return response;
     }
 
     @Override
@@ -189,6 +226,7 @@ public class AuthServiceImpl implements AuthService {
     public UserResponse updateProfile(UUID userId, UpdateProfileRequest request) {
         log.info("Update profile userId={}", userId);
         User user = findActiveUser(userId);
+        String oldUsername = user.getUsername();
         if (request.getDisplayName() != null && !request.getDisplayName().isBlank()) {
             user.setDisplayName(request.getDisplayName());
         }
@@ -208,7 +246,9 @@ public class AuthServiceImpl implements AuthService {
             }
         }
         user.setUpdatedBy(user.getUsername());
-        return userMapper.toResponse(userRepository.save(user));
+        User saved = userRepository.save(user);
+        invalidateProfileCache(userId, oldUsername);
+        return userMapper.toResponse(saved);
     }
 
     @Override
@@ -233,6 +273,52 @@ public class AuthServiceImpl implements AuthService {
         user.setDeletedAt(Instant.now());
         user.setUpdatedBy(AuditActors.resolve(actorUsername, user.getId()));
         userRepository.save(user);
+        invalidateProfileCache(user.getId(), user.getUsername());
+        tokenBlacklistService.revokeAllForUser(user.getId());
+    }
+
+    private RedisJsonCache cache() {
+        return cacheEnabled ? cacheProvider.getIfAvailable() : null;
+    }
+
+    private void putProfileCache(UserResponse response) {
+        RedisJsonCache cache = cache();
+        if (cache == null || response == null || response.getId() == null) {
+            return;
+        }
+        UserResponse card = publicCard(response);
+        if (response.getUsername() != null) {
+            cache.set(profileUsernameKey(response.getUsername()), card, PROFILE_TTL);
+        }
+        cache.set(profileIdKey(response.getId()), card, PROFILE_TTL);
+    }
+
+    private void invalidateProfileCache(UUID userId, String username) {
+        RedisJsonCache cache = cache();
+        if (cache == null) {
+            return;
+        }
+        if (userId != null) {
+            cache.delete(profileIdKey(userId));
+        }
+        if (username != null && !username.isBlank()) {
+            cache.delete(profileUsernameKey(username));
+        }
+    }
+
+    private UserResponse publicCard(UserResponse user) {
+        if (user != null) {
+            user.setEmail(null);
+        }
+        return user;
+    }
+
+    private static String profileUsernameKey(String username) {
+        return "user:profile:v1:u:" + username.trim().toLowerCase();
+    }
+
+    private static String profileIdKey(UUID id) {
+        return "user:profile:v1:id:" + id;
     }
 
     private void ensureSocialRow(User user) {

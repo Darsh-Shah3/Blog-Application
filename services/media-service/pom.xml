@@ -78,6 +78,12 @@
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>2.3.0</version>
         </dependency>
+        <!-- S3-compatible object storage (MinIO / R2 / AWS S3) when MEDIA_STORAGE=s3 -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.25.27</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

@@ -39,11 +39,27 @@ Text-only posts skip steps 2–3; `media_id` is null.
 | Layer | Choice | Why |
 |---|---|---|
 | Metadata DB | Existing Postgres + `media_db` | Already free in Docker; no extra product |
-| Bytes | Docker named volume / local disk | Zero cost on a VPS free tier |
-| Optional upgrade | **MinIO** in Compose, or **Cloudflare R2** free tier | Same `ObjectStorage` port; swap adapter later |
+| Bytes (default) | Docker named volume / local disk (`MEDIA_STORAGE=local`) | Zero cost on a VPS free tier |
+| Bytes (S3) | **MinIO** in Compose, or **Cloudflare R2** / AWS S3 (`MEDIA_STORAGE=s3`) | Same `ObjectStorage` port — `LocalFileObjectStorage` vs `S3ObjectStorage` |
 | Avoid | Storing files as BYTEA in Postgres | Bloats DB, slow backups, expensive IOPS |
 
 You do **not** need another database for files. One more table column family (`media_kind`) is enough.
+
+### Switch to MinIO (local S3 demo)
+
+```bash
+# .env
+MEDIA_STORAGE=s3
+S3_ENDPOINT=http://minio:9000
+S3_ACCESS_KEY=minioadmin
+S3_SECRET_KEY=your-strong-password
+S3_BUCKET=threadly-media
+S3_PATH_STYLE=true
+
+docker compose --profile minio up -d --build media-service minio
+```
+
+For Cloudflare R2 / AWS: set `S3_ENDPOINT` to the provider endpoint, `S3_PATH_STYLE=false` when required, and real access keys. TLS/edge notes: [edge-tls.md](./edge-tls.md).
 
 ## Size caps (defaults)
 

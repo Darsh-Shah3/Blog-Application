@@ -1,0 +1,67 @@
+# API gateway — 2 replicas for load balancing via the ClusterIP Service + Ingress.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: threadly
+  labels:
+    app: api-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: app
+          image: threadly/api-gateway:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: threadly-config
+            - secretRef:
+                name: threadly-secrets
+          env:
+            - name: SERVER_PORT
+              value: "8080"
+            - name: JAVA_OPTS
+              value: "-Xmx256m -Xms128m"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 45
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: threadly
+spec:
+  # ClusterIP + multiple Endpoints = kube-proxy load balancing across gateway pods
+  selector:
+    app: api-gateway
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
