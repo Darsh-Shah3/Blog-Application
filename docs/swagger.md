@@ -23,7 +23,9 @@ The **canonical** API gateway does **not** ship a complete aggregated Swagger UI
 Gateway health: http://localhost:8080/actuator/health  
 (Prod-like: only this health URL is public at the edge; service Swagger ports are not published.)
 
-Use **`/swagger-ui/index.html`** (not `/swagger-ui.html` alone — it often 404s or redirects).
+Use **`/swagger-ui/index.html`** (hyphen). Paths like `/webjars/swagger_ui/...` (underscore) **404**.
+
+Gateway `http://localhost:8080/` (non-prod) shows an index of all service Swagger links — the gateway itself does **not** host a full aggregated UI.
 
 ## How to test APIs
 

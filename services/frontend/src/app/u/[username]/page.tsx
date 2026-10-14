@@ -238,9 +238,11 @@ export default function ProfilePage() {
   }
   if (!user) {
     return (
-      <div className="panel" style={{ marginTop: '1.5rem' }}>
-        <p>User not found.</p>
-        <Link href="/" className="btn secondary">Home</Link>
+      <div className="page-shell soft-banner" style={{ marginTop: '1.5rem' }}>
+        <div>
+          <p>User not found.</p>
+          <Link href="/" className="btn secondary">Home</Link>
+        </div>
       </div>
     );
   }
@@ -251,8 +253,8 @@ export default function ProfilePage() {
   const canManageRoles = Boolean(me && token && isAdmin(me) && !deactivated);
 
   return (
-    <>
-      <section className="hero profile-hero">
+    <div className="page-shell page-shell-wide profile-page">
+      <section className="profile-hero">
         <div className="profile-hero-row">
           <div className="profile-dp-wrap">
             <UserAvatar
@@ -386,12 +388,12 @@ export default function ProfilePage() {
           </div>
         </div>
       </section>
-      <div className="stack">
+      <div className="stack feed-list profile-posts">
         {posts.map((p) => <PostCard key={p.id} post={p} />)}
         {posts.length === 0 && (
           <ContentPlaceholder title="No posts yet" description="This user has not published anything." />
         )}
       </div>
-    </>
+    </div>
   );
 }

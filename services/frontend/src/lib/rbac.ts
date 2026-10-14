@@ -33,6 +33,24 @@ export function canDeleteContent(
   return isModerator(user);
 }
 
+export function canDeleteCommunity(
+  user: User | null | undefined,
+  creatorId: number | string
+): boolean {
+  if (!user) return false;
+  if (user.id === creatorId || String(user.id) === String(creatorId)) return true;
+  if (user.permissions?.includes('COMMUNITY_DELETE')) return true;
+  return isAdmin(user);
+}
+
+export function canEditOwn(
+  user: User | null | undefined,
+  authorId: number | string
+): boolean {
+  if (!user) return false;
+  return user.id === authorId || String(user.id) === String(authorId);
+}
+
 export function roleLabel(role: string): string {
   switch (role) {
     case ROLES.ADMIN:

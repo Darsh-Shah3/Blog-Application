@@ -36,12 +36,12 @@ function readStoredTheme(): Theme | null {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('light');
+  const [theme, setThemeState] = useState<Theme>('dark');
 
   useEffect(() => {
     const stored = readStoredTheme();
-    const initial = stored
-      ?? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    // Dark-first: only honor an explicit saved preference; otherwise default dark.
+    const initial = stored ?? 'dark';
     setThemeState(initial);
     applyTheme(initial);
   }, []);

@@ -196,10 +196,12 @@ export default function MessagesPage() {
   if (!user || !token) {
     return (
       <div className="page-shell page-shell-wide">
-        <div className="panel">
-          <h1 style={{ fontFamily: 'var(--font-display)', marginTop: 0 }}>Messages</h1>
-          <p className="muted">Sign in to send private messages to other members.</p>
-          <div className="toolbar">
+        <div className="soft-banner">
+          <div>
+            <h1 className="page-title-plain">Messages</h1>
+            <p className="muted">Sign in to send private messages to other members.</p>
+          </div>
+          <div className="toolbar" style={{ margin: 0 }}>
             <Link className="btn" href="/login?next=/messages">Log in</Link>
             <Link className="btn secondary" href="/register">Sign up</Link>
           </div>
@@ -210,18 +212,13 @@ export default function MessagesPage() {
 
   return (
     <div className="page-shell page-shell-wide dm-page">
-      <header className="page-header page-header-compact">
-        <div className="page-header-row">
-          <div>
-            <p className="page-kicker">Inbox</p>
-            <h1>Messages</h1>
-            <p>Private 1:1 chats — live over WebSocket, same stack as community rooms.</p>
-          </div>
-        </div>
-      </header>
+      <div className="page-title-block">
+        <h1 className="page-title-plain">Messages</h1>
+        <p className="muted">Private 1:1 chats — live updates as you talk.</p>
+      </div>
 
       <div className="dm-layout">
-        <aside className="dm-sidebar panel">
+        <aside className="dm-sidebar">
           <form className="dm-start-form" onSubmit={startByUsername}>
             <label>
               Message a member

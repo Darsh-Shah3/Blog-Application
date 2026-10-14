@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { api, Community, friendlyError, Page, Post } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
+import { canDeleteCommunity } from '@/lib/rbac';
 import { PostCard } from '@/components/PostCard';
 import { CommunityChat } from '@/components/CommunityChat';
 import { CreatePostModal } from '@/components/CreatePostModal';
@@ -69,6 +70,18 @@ export default function CommunityPage() {
     }
   };
 
+  const removeCommunity = async () => {
+    if (!community || !token) return;
+    if (!window.confirm(`Delete community “${community.name}”? This cannot be undone.`)) return;
+    try {
+      await api(`/api/v1/communities/${community.id}`, { method: 'DELETE' }, token);
+      success('Community deleted.');
+      router.push('/communities');
+    } catch (e) {
+      error(friendlyError(e, 'Could not delete community.'));
+    }
+  };
+
   if (authLoading || (loading && !community)) {
     return <CommunityDetailSkeleton />;
   }
@@ -117,10 +130,10 @@ export default function CommunityPage() {
             <h1>{community.name}</h1>
             <p>{community.description || 'A place for focused discussion.'}</p>
             <div className="page-meta-row">
-              <span className="page-pill teal">{community.memberCount} members</span>
-              {community.joined && <span className="page-pill coral">You&apos;re a member</span>}
+              <span className="muted">{community.memberCount} members</span>
+              {community.joined && <span className="muted">· You&apos;re a member</span>}
               <span className="muted" style={{ fontSize: '0.9rem' }}>
-                Created by <Link href={`/u/${creator}`}>{creator}</Link>
+                · Created by <Link href={`/u/${creator}`}>{creator}</Link>
               </span>
             </div>
           </div>
@@ -129,25 +142,19 @@ export default function CommunityPage() {
               <button className="btn" type="button" onClick={join}>Join</button>
             )}
             {user && community.joined && (
-              <>
-                <button className="btn" type="button" onClick={() => setComposeOpen(true)}>
-                  Post here
-                </button>
-                <button className="btn secondary" type="button" onClick={leave}>Leave</button>
-              </>
+              <button className="btn secondary" type="button" onClick={leave}>Leave</button>
             )}
-            {!user && (
-              <>
-                <Link className="btn" href={`/login${nextQ}`}>Sign in to join</Link>
-                <Link className="btn secondary" href={`/login${nextQ}`}>Sign in to post</Link>
-              </>
+            {canDeleteCommunity(user, community.creatorId) && (
+              <button className="btn ghost danger-text" type="button" onClick={removeCommunity}>
+                Delete community
+              </button>
             )}
           </div>
         </div>
       </header>
 
       {!user && (
-        <div className="panel feed-guest-banner">
+        <div className="feed-guest-banner soft-banner">
           <div>
             <strong>Browsing as a guest</strong>
             <p className="muted" style={{ margin: '0.25rem 0 0' }}>
@@ -174,7 +181,7 @@ export default function CommunityPage() {
             {filteredPosts.map((p) => <PostCard key={p.id} post={p} />)}
           </div>
           {filteredPosts.length === 0 && (
-            <div className="panel muted">
+            <div className="soft-empty muted">
               {q.trim()
                 ? 'No posts match that filter.'
                 : 'No posts in this community yet. Be the first to share something.'}

@@ -1,8 +1,9 @@
 'use client';
 
+import { useEffect, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
-import type { ReactNode } from 'react';
 import { Sidebar } from '@/components/Sidebar';
+import { AppTopBar } from '@/components/AppTopBar';
 import { SiteFooter } from '@/components/SiteFooter';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
@@ -22,6 +23,11 @@ function isBareRoute(pathname: string) {
 export function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname() || '/';
   const bare = isBareRoute(pathname);
+  const [navOpen, setNavOpen] = useState(false);
+
+  useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
 
   if (bare) {
     return (
@@ -33,7 +39,8 @@ export function AppChrome({ children }: { children: ReactNode }) {
 
   return (
     <div className="app-shell">
-      <Sidebar />
+      <AppTopBar navOpen={navOpen} onToggleNav={() => setNavOpen((v) => !v)} />
+      <Sidebar open={navOpen} onOpenChange={setNavOpen} />
       <div className="content-column">
         <main className="main">
           <ErrorBoundary>{children}</ErrorBoundary>

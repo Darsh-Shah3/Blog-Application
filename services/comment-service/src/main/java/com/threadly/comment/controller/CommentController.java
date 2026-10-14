@@ -2,6 +2,7 @@ package com.threadly.comment.controller;
 
 import com.threadly.comment.dto.CommentResponse;
 import com.threadly.comment.dto.CreateCommentRequest;
+import com.threadly.comment.dto.UpdateCommentRequest;
 import com.threadly.comment.exception.ApiException;
 import com.threadly.comment.service.CommentService;
 import jakarta.validation.Valid;
@@ -44,6 +45,18 @@ public class CommentController {
     @GetMapping("/{id}")
     public ResponseEntity<CommentResponse> get(@PathVariable UUID id) {
         return ResponseEntity.ok(commentService.get(id));
+    }
+
+    @PatchMapping("/{id}")
+    public ResponseEntity<CommentResponse> update(
+            @PathVariable UUID id,
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @RequestHeader(value = "X-Username", required = false) String username,
+            @Valid @RequestBody UpdateCommentRequest request) {
+        if (userId == null) {
+            throw new ApiException("Authentication required", 401);
+        }
+        return ResponseEntity.ok(commentService.update(id, userId, username, request));
     }
 
     @DeleteMapping("/{id}")

@@ -2,9 +2,11 @@ package com.threadly.community.service.impl;
 
 import com.threadly.community.client.NotificationClient;
 import com.threadly.community.dto.CreateChatMessageRequest;
+import com.threadly.community.dto.DeleteMessageRequest;
 import com.threadly.community.dto.DmMessageResponse;
 import com.threadly.community.dto.DmThreadResponse;
 import com.threadly.community.dto.OpenDmRequest;
+import com.threadly.community.dto.UpdateChatMessageRequest;
 import com.threadly.community.entity.DmMessage;
 import com.threadly.community.entity.DmThread;
 import com.threadly.community.exception.ApiException;
@@ -123,10 +125,9 @@ public class DirectMessageServiceImpl implements DirectMessageService {
     @Transactional(readOnly = true)
     public Page<DmMessageResponse> listMessages(UUID me, UUID threadId, Pageable pageable) {
         requireParticipant(me, threadId);
-        Pageable capped = pageable.getPageSize() > 100
-                ? PageRequest.of(pageable.getPageNumber(), 100, pageable.getSort())
-                : pageable;
-        return messageRepository.findByThreadIdOrderByCreatedAtDesc(threadId, capped).map(this::toMessageResponse);
+        int size = Math.min(Math.max(pageable.getPageSize(), 1), 100);
+        Pageable capped = PageRequest.of(pageable.getPageNumber(), size);
+        return messageRepository.findVisibleForUser(threadId, me, capped).map(this::toMessageResponse);
     }
 
     @Override
@@ -186,6 +187,64 @@ public class DirectMessageServiceImpl implements DirectMessageService {
         return response;
     }
 
+    @Override
+    @Transactional
+    public DmMessageResponse edit(UUID me, UUID threadId, UUID messageId, UpdateChatMessageRequest request) {
+        requireParticipant(me, threadId);
+        DmMessage msg = requireMessage(threadId, messageId);
+        if (!msg.getAuthorId().equals(me)) {
+            throw new ApiException("Only the author can edit this message", HttpStatus.FORBIDDEN.value());
+        }
+        if (msg.isDeletedForEveryone()) {
+            throw new ApiException("Cannot edit a deleted message", HttpStatus.BAD_REQUEST.value());
+        }
+        String body = request.getBody() == null ? "" : request.getBody().trim();
+        if (body.isEmpty()) {
+            throw new ApiException("Message cannot be empty", HttpStatus.BAD_REQUEST.value());
+        }
+        msg.setBody(body);
+        msg.setEditedAt(Instant.now());
+        DmMessageResponse response = toMessageResponse(messageRepository.save(msg));
+        messagingTemplate.convertAndSend(topic(threadId), response);
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public DmMessageResponse delete(UUID me, UUID threadId, UUID messageId, DeleteMessageRequest request) {
+        requireParticipant(me, threadId);
+        DmMessage msg = requireMessage(threadId, messageId);
+        DeleteMessageRequest.Scope scope = request.getScope() == null
+                ? DeleteMessageRequest.Scope.ME
+                : request.getScope();
+
+        if (scope == DeleteMessageRequest.Scope.ME) {
+            msg.hideFor(me);
+            messageRepository.save(msg);
+            return null;
+        }
+
+        // Private DMs: only the author may delete for everyone (admins cannot).
+        if (!msg.getAuthorId().equals(me)) {
+            throw new ApiException("Only the author can delete this message for everyone", HttpStatus.FORBIDDEN.value());
+        }
+        msg.setDeletedForEveryone(true);
+        msg.setBody("");
+        msg.setEditedAt(Instant.now());
+        DmMessageResponse response = toMessageResponse(messageRepository.save(msg));
+        messagingTemplate.convertAndSend(topic(threadId), response);
+        return response;
+    }
+
+    private DmMessage requireMessage(UUID threadId, UUID messageId) {
+        DmMessage msg = messageRepository.findById(messageId)
+                .orElseThrow(() -> new ApiException("Message not found", HttpStatus.NOT_FOUND.value()));
+        if (!msg.getThreadId().equals(threadId)) {
+            throw new ApiException("Message not found", HttpStatus.NOT_FOUND.value());
+        }
+        return msg;
+    }
+
     private DmThread requireParticipant(UUID me, UUID threadId) {
         DmThread thread = threadRepository.findById(threadId)
                 .orElseThrow(() -> new ApiException("Conversation not found", HttpStatus.NOT_FOUND.value()));
@@ -210,14 +269,17 @@ public class DirectMessageServiceImpl implements DirectMessageService {
         String username = m.getAuthor() != null && m.getAuthor().get("username") != null
                 ? String.valueOf(m.getAuthor().get("username"))
                 : "user";
+        boolean deleted = m.isDeletedForEveryone();
         return DmMessageResponse.builder()
                 .id(m.getId())
                 .threadId(m.getThreadId())
                 .authorId(m.getAuthorId())
                 .authorUsername(username)
                 .author(m.getAuthor())
-                .body(m.getBody())
+                .body(deleted ? "" : m.getBody())
                 .createdAt(m.getCreatedAt())
+                .editedAt(m.getEditedAt())
+                .deletedForEveryone(deleted)
                 .build();
     }
 }

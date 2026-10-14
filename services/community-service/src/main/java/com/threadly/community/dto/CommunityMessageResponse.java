@@ -17,4 +17,6 @@ public class CommunityMessageResponse {
     private Map<String, Object> author;
     private String body;
     private Instant createdAt;
+    private Instant editedAt;
+    private boolean deletedForEveryone;
 }

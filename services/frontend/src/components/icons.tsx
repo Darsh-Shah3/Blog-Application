@@ -101,12 +101,23 @@ export function LogOutIcon(p: IconProps) {
   );
 }
 
+/** Mobile nav toggle — panel mark (not a 3-line hamburger). */
 export function MenuIcon(p: IconProps) {
   return (
     <Icon {...p}>
-      <path d="M4 6h16" />
-      <path d="M4 12h16" />
-      <path d="M4 18h16" />
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
+    </Icon>
+  );
+}
+
+/** Vertical ⋮ overflow menu. */
+export function MoreVerticalIcon(p: IconProps) {
+  return (
+    <Icon {...p}>
+      <circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none" />
     </Icon>
   );
 }

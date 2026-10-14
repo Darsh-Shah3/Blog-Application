@@ -1,9 +1,11 @@
 package com.threadly.community.controller;
 
 import com.threadly.community.dto.CreateChatMessageRequest;
+import com.threadly.community.dto.DeleteMessageRequest;
 import com.threadly.community.dto.DmMessageResponse;
 import com.threadly.community.dto.DmThreadResponse;
 import com.threadly.community.dto.OpenDmRequest;
+import com.threadly.community.dto.UpdateChatMessageRequest;
 import com.threadly.community.service.DirectMessageService;
 import com.threadly.community.web.RequestIdentity;
 import jakarta.validation.Valid;
@@ -70,5 +72,31 @@ public class DirectMessageController {
         UUID me = requestIdentity.requireUserId(userId);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(directMessageService.send(me, username, threadId, request));
+    }
+
+    @PatchMapping("/threads/{threadId}/messages/{messageId}")
+    public ResponseEntity<DmMessageResponse> edit(
+            @PathVariable UUID threadId,
+            @PathVariable UUID messageId,
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @Valid @RequestBody UpdateChatMessageRequest request) {
+        UUID me = requestIdentity.requireUserId(userId);
+        return ResponseEntity.ok(directMessageService.edit(me, threadId, messageId, request));
+    }
+
+    @DeleteMapping("/threads/{threadId}/messages/{messageId}")
+    public ResponseEntity<?> delete(
+            @PathVariable UUID threadId,
+            @PathVariable UUID messageId,
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @RequestParam(defaultValue = "ME") DeleteMessageRequest.Scope scope) {
+        UUID me = requestIdentity.requireUserId(userId);
+        DeleteMessageRequest body = new DeleteMessageRequest();
+        body.setScope(scope);
+        DmMessageResponse updated = directMessageService.delete(me, threadId, messageId, body);
+        if (updated == null) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(updated);
     }
 }

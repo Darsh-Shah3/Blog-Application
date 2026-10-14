@@ -9,7 +9,8 @@ import { useToast } from '@/lib/toast';
 import { CommunitySkeletonList, ContentPlaceholder, SpinnerLabel } from '@/components/loaders';
 import { UsersIcon } from '@/components/icons';
 import { TopBar } from '@/components/TopBar';
-import { CreateIconBtn, ViewIconLink } from '@/components/ActionIcon';
+import { ViewIconLink } from '@/components/ActionIcon';
+import { PlusIcon } from '@/components/icons';
 
 const PAGE_SIZE = 12;
 
@@ -149,30 +150,22 @@ export default function CommunitiesPage() {
             )}
             actions={
               user ? (
-                <CreateIconBtn
-                  label="Create community"
+                <button
+                  type="button"
+                  className="btn feed-compose-btn"
                   onClick={() => document.getElementById('create-community-name')?.focus()}
-                />
+                >
+                  <PlusIcon size={15} />
+                  <span>Create</span>
+                </button>
               ) : (
                 <Link className="btn secondary" href="/login">Log in</Link>
               )
             }
           />
 
-          <header className="page-header page-header-compact">
-            <div className="page-header-row">
-              <div>
-                <p className="page-kicker">Spaces</p>
-                <h1>Communities</h1>
-                <p>
-                  Topic-first rooms for discussion. Browse without an account — join or create once you&apos;re signed in.
-                </p>
-              </div>
-            </div>
-          </header>
-
           {!user && (
-            <div className="panel feed-guest-banner">
+            <div className="feed-guest-banner soft-banner">
               <div>
                 <strong>Browsing as a guest</strong>
                 <p className="muted" style={{ margin: '0.25rem 0 0' }}>

@@ -23,6 +23,7 @@ public class CommentResponse {
     private String content;
     private Long score;
     private Instant createdAt;
+    private Instant updatedAt;
     private String createdBy;
     private String updatedBy;
     @Builder.Default

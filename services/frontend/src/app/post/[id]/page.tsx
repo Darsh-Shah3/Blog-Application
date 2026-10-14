@@ -5,12 +5,13 @@ import { useParams } from 'next/navigation';
 import { api, CommentNode, Community, friendlyError, Page, Post } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
-import { canDeleteContent } from '@/lib/rbac';
-import { DeleteIconBtn } from '@/components/ActionIcon';
+import { canDeleteContent, canEditOwn } from '@/lib/rbac';
+import { DeleteIconBtn, EditIconBtn } from '@/components/ActionIcon';
 import { PostCard } from '@/components/PostCard';
 import { AuthorAvatar, AuthorName, usePrefetchAuthors } from '@/components/AuthorIdentity';
 import Link from 'next/link';
 import { PostDetailSkeleton, SpinnerLabel } from '@/components/loaders';
+import { renderLinkedText } from '@/lib/richText';
 
 const COMMENT_PAGE = 25;
 
@@ -45,7 +46,14 @@ function CommentTree({
   onCancelReply,
   onSubmitReply,
   onDelete,
+  onEdit,
+  editingId,
+  editDraft,
+  setEditDraft,
+  onStartEdit,
+  onCancelEdit,
   canDelete,
+  canEdit,
   canReply,
   depth = 0,
   parentAuthor,
@@ -58,7 +66,14 @@ function CommentTree({
   onCancelReply: () => void;
   onSubmitReply: (parentId: string) => void;
   onDelete: (id: string) => void;
+  onEdit: (id: string) => void;
+  editingId: string | null;
+  editDraft: string;
+  setEditDraft: (v: string) => void;
+  onStartEdit: (id: string, content: string) => void;
+  onCancelEdit: () => void;
   canDelete: (authorId: number | string) => boolean;
+  canEdit: (authorId: number | string) => boolean;
   canReply: boolean;
   depth?: number;
   parentAuthor?: string;
@@ -70,6 +85,10 @@ function CommentTree({
       {nodes.map((c) => {
         const name = c.authorUsername || String(c.authorId);
         const isReplying = replyToId === c.id;
+        const isEditing = editingId === c.id;
+        const wasEdited = Boolean(
+          c.updatedAt && c.createdAt && new Date(c.updatedAt).getTime() - new Date(c.createdAt).getTime() > 2000
+        );
         return (
           <div key={c.id} className={`yt-thread ${depth > 0 ? 'yt-thread-nested' : ''}`}>
             <div className="yt-thread-line" aria-hidden="true" />
@@ -84,14 +103,44 @@ function CommentTree({
                     </span>
                   )}
                   <span className="yt-time">{relativeTime(c.createdAt)}</span>
+                  {wasEdited && <span className="yt-time">· edited</span>}
                 </div>
-                <p className="yt-comment-text">{c.content}</p>
+                {isEditing ? (
+                  <form
+                    className="yt-inline-reply"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      onEdit(c.id);
+                    }}
+                  >
+                    <textarea
+                      value={editDraft}
+                      onChange={(e) => setEditDraft(e.target.value)}
+                      required
+                      rows={2}
+                      autoFocus
+                    />
+                    <div className="yt-inline-reply-actions">
+                      <button type="button" className="btn ghost" onClick={onCancelEdit}>Cancel</button>
+                      <button type="submit" className="btn" disabled={!editDraft.trim()}>Save</button>
+                    </div>
+                  </form>
+                ) : (
+                  <p className="yt-comment-text">{renderLinkedText(c.content)}</p>
+                )}
                 <div className="yt-comment-actions">
                   <span className="yt-likes" title="Score">▲ {c.score}</span>
-                  {canReply && (
+                  {canReply && !isEditing && (
                     <button type="button" className="yt-action-btn" onClick={() => onStartReply(c.id)}>
                       Reply
                     </button>
+                  )}
+                  {canEdit(c.authorId) && !isEditing && (
+                    <EditIconBtn
+                      className="yt-icon-edit"
+                      label="Edit comment"
+                      onClick={() => onStartEdit(c.id, c.content)}
+                    />
                   )}
                   {canDelete(c.authorId) && (
                     <DeleteIconBtn
@@ -138,7 +187,14 @@ function CommentTree({
                     onCancelReply={onCancelReply}
                     onSubmitReply={onSubmitReply}
                     onDelete={onDelete}
+                    onEdit={onEdit}
+                    editingId={editingId}
+                    editDraft={editDraft}
+                    setEditDraft={setEditDraft}
+                    onStartEdit={onStartEdit}
+                    onCancelEdit={onCancelEdit}
                     canDelete={canDelete}
+                    canEdit={canEdit}
                     canReply={canReply}
                     depth={depth + 1}
                     parentAuthor={name}
@@ -166,6 +222,8 @@ export default function PostDetailPage() {
   const [content, setContent] = useState('');
   const [parentId, setParentId] = useState<string | null>(null);
   const [replyDraft, setReplyDraft] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingComments, setLoadingComments] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -294,18 +352,36 @@ export default function PostDetailPage() {
     }
   };
 
+  const saveCommentEdit = async (id: string) => {
+    if (!token || !editDraft.trim()) return;
+    try {
+      await api(`/api/v1/comments/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ content: editDraft.trim() }),
+      }, token);
+      setEditingId(null);
+      setEditDraft('');
+      success('Comment updated.');
+      await loadComments(0, false);
+    } catch (e) {
+      error(friendlyError(e, 'Could not edit comment.'));
+    }
+  };
+
   if (authLoading || (loading && !post)) {
     return <PostDetailSkeleton />;
   }
 
   if (!post) {
     return (
-      <div className="panel" style={{ marginTop: '1.5rem' }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', marginTop: 0 }}>Post not found</h1>
-        <p className="muted">It may have been removed, or the link is incomplete.</p>
-        <div className="toolbar">
-          <Link href="/feed" className="btn">Back to posts</Link>
-          <Link href="/communities" className="btn secondary">Communities</Link>
+      <div className="page-shell soft-banner" style={{ marginTop: '1.5rem' }}>
+        <div>
+          <h1 className="page-title-plain">Post not found</h1>
+          <p className="muted">It may have been removed, or the link is incomplete.</p>
+          <div className="toolbar">
+            <Link href="/feed" className="btn">Back to posts</Link>
+            <Link href="/communities" className="btn secondary">Communities</Link>
+          </div>
         </div>
       </div>
     );
@@ -328,7 +404,7 @@ export default function PostDetailPage() {
       <Link href="/feed" className="post-detail-back">← Posts</Link>
 
       {!user && (
-        <div className="panel feed-guest-banner guest-post-banner">
+        <div className="feed-guest-banner soft-banner guest-post-banner">
           <div>
             <strong>Reading as a guest</strong>
             <p className="muted" style={{ margin: '0.25rem 0 0' }}>
@@ -345,22 +421,24 @@ export default function PostDetailPage() {
       <div className="feed-layout post-detail-layout">
         <div className="feed-main stack">
           <header className="page-header page-header-post">
-            <p className="page-kicker">Discussion</p>
             <div className="page-meta-row" style={{ marginTop: 0, marginBottom: '0.55rem' }}>
               {communitySlug ? (
-                <Link href={`/c/${communitySlug}`} className="page-pill teal">
+                <Link href={`/c/${communitySlug}`} className="meta-link">
                   {communityName}
                 </Link>
               ) : (
-                <span className="page-pill teal">Community</span>
+                <span className="muted">Community</span>
               )}
               {post.authorUsername && (
-                <Link href={`/u/${post.authorUsername}`} className="page-pill">
-                  {post.authorUsername}
-                </Link>
+                <>
+                  <span className="muted">·</span>
+                  <Link href={`/u/${post.authorUsername}`} className="meta-link">
+                    {post.authorUsername}
+                  </Link>
+                </>
               )}
               <span className="muted" style={{ fontSize: '0.88rem' }}>
-                {new Date(post.createdAt).toLocaleString()}
+                · {new Date(post.createdAt).toLocaleString()}
               </span>
             </div>
             <h1 style={{ marginBottom: 0 }}>{post.title}</h1>
@@ -368,8 +446,8 @@ export default function PostDetailPage() {
 
           <PostCard post={post} onScoreChange={setPost} expandedBody />
           {full && (
-            <section className="panel post-body">
-              <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: '1.02rem' }}>{shown}</div>
+            <section className="post-body soft-section">
+              <div className="post-body-text">{renderLinkedText(shown)}</div>
               {isLong && (
                 <button type="button" className="btn ghost" style={{ marginTop: '0.75rem' }} onClick={() => setExpanded((v) => !v)}>
                   {expanded ? 'Show less' : 'Read more'}
@@ -377,7 +455,7 @@ export default function PostDetailPage() {
               )}
             </section>
           )}
-          <section className="panel yt-comments-panel">
+          <section className="yt-comments-panel soft-section">
             <h2 style={{ fontFamily: 'var(--font-display)', marginTop: 0 }}>
               {totalComments} {totalComments === 1 ? 'Comment' : 'Comments'}
             </h2>
@@ -419,6 +497,7 @@ export default function PostDetailPage() {
                 onStartReply={(id) => {
                   setParentId(id);
                   setReplyDraft('');
+                  setEditingId(null);
                 }}
                 onCancelReply={() => {
                   setParentId(null);
@@ -426,7 +505,21 @@ export default function PostDetailPage() {
                 }}
                 onSubmitReply={submitReply}
                 onDelete={deleteComment}
+                onEdit={saveCommentEdit}
+                editingId={editingId}
+                editDraft={editDraft}
+                setEditDraft={setEditDraft}
+                onStartEdit={(id, text) => {
+                  setEditingId(id);
+                  setEditDraft(text);
+                  setParentId(null);
+                }}
+                onCancelEdit={() => {
+                  setEditingId(null);
+                  setEditDraft('');
+                }}
                 canDelete={(authorId) => canDeleteContent(user, authorId)}
+                canEdit={(authorId) => canEditOwn(user, authorId)}
                 canReply={Boolean(user)}
               />
             )}
@@ -507,8 +600,8 @@ export default function PostDetailPage() {
                 <span>Score</span>
               </div>
               <div className="post-rail-stat">
-                <strong>{post.postType}</strong>
-                <span>Type</span>
+                <strong>{post.commentCount ?? 0}</strong>
+                <span>Comments</span>
               </div>
             </div>
           </div>

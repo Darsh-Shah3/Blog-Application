@@ -6,6 +6,8 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -42,6 +44,36 @@ public class CommunityMessage {
     @Builder.Default
     private Instant createdAt = Instant.now();
 
+    @Column(name = "edited_at")
+    private Instant editedAt;
+
+    @Column(name = "deleted_for_everyone", nullable = false)
+    @Builder.Default
+    private boolean deletedForEveryone = false;
+
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "hidden_for", columnDefinition = "uuid[]", nullable = false)
+    @Builder.Default
+    private List<UUID> hiddenFor = new ArrayList<>();
+
+    public boolean isHiddenFor(UUID userId) {
+        return userId != null && hiddenFor != null && hiddenFor.contains(userId);
+    }
+
+    public void hideFor(UUID userId) {
+        if (userId == null) {
+            return;
+        }
+        if (hiddenFor == null) {
+            hiddenFor = new ArrayList<>();
+        } else if (!(hiddenFor instanceof ArrayList)) {
+            hiddenFor = new ArrayList<>(hiddenFor);
+        }
+        if (!hiddenFor.contains(userId)) {
+            hiddenFor.add(userId);
+        }
+    }
+
     @PrePersist
     void ensureId() {
         if (id == null) {
@@ -49,6 +81,9 @@ public class CommunityMessage {
         }
         if (createdAt == null) {
             createdAt = Instant.now();
+        }
+        if (hiddenFor == null) {
+            hiddenFor = new ArrayList<>();
         }
     }
 }

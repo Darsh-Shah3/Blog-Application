@@ -6,19 +6,13 @@ import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { isAdmin, roleLabel } from '@/lib/rbac';
-import { useTheme } from '@/lib/theme';
 import {
-  CloseIcon,
   HomeIcon,
   LogInIcon,
   LogOutIcon,
-  MenuIcon,
   MessageCircleIcon,
   MessageIcon,
-  MoonIcon,
   ShieldIcon,
-  SunIcon,
-  UserIcon,
   UserPlusIcon,
   UsersIcon,
 } from '@/components/icons';
@@ -54,14 +48,19 @@ function ChevronLeftIcon({ size = 18 }: { size?: number }) {
   );
 }
 
-export function Sidebar() {
+export function Sidebar({
+  open = false,
+  onOpenChange,
+}: {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const { user, token, logout, loading } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [unread, setUnread] = useState(0);
   const [dmUnread, setDmUnread] = useState(0);
+  const mobileOpen = open;
 
   useEffect(() => {
     try {
@@ -72,13 +71,9 @@ export function Sidebar() {
   }, []);
 
   useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
     if (!mobileOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMobileOpen(false);
+      if (e.key === 'Escape') onOpenChange?.(false);
     };
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -87,7 +82,7 @@ export function Sidebar() {
       document.body.style.overflow = prev;
       window.removeEventListener('keydown', onKey);
     };
-  }, [mobileOpen]);
+  }, [mobileOpen, onOpenChange]);
 
   useEffect(() => {
     if (!token) {
@@ -207,46 +202,12 @@ export function Sidebar() {
 
   return (
     <>
-      <header className="mobile-bar">
-        <button
-          type="button"
-          className="icon-btn"
-          aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
-          aria-expanded={mobileOpen}
-          onClick={() => setMobileOpen((v) => !v)}
-        >
-          {mobileOpen ? <CloseIcon size={20} /> : <MenuIcon size={20} />}
-        </button>
-        <Link href="/" className="brand brand-inline brand-with-image">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand-mark.svg" alt="" className="brand-img brand-img-sm" width={28} height={28} />
-          Thread<span>ly</span>
-        </Link>
-        <button
-          type="button"
-          className="icon-btn"
-          onClick={() => window.location.reload()}
-          aria-label="Refresh page"
-          title="Refresh"
-        >
-          <RefreshGlyph size={18} />
-        </button>
-        <button
-          type="button"
-          className="icon-btn"
-          onClick={toggleTheme}
-          aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-        >
-          {theme === 'dark' ? <SunIcon size={18} /> : <MoonIcon size={18} />}
-        </button>
-      </header>
-
       {mobileOpen && (
         <button
           type="button"
           className="sidebar-backdrop"
           aria-label="Close navigation"
-          onClick={() => setMobileOpen(false)}
+          onClick={() => onOpenChange?.(false)}
         />
       )}
 
@@ -268,21 +229,14 @@ export function Sidebar() {
               type="button"
               className="sidebar-brand sidebar-brand-btn"
               onClick={expandSidebar}
-              title="Expand menu"
+              title="Expand spaces"
               aria-label="Expand sidebar"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brand-mark.svg" alt="Threadly" className="brand-img" width={34} height={34} />
+              <PanelExpandIcon size={18} />
             </button>
           ) : (
             <>
-              <Link href="/" className="sidebar-brand" title="Threadly">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/brand-mark.svg" alt="" className="brand-img" width={34} height={34} />
-                <span className="brand-text">
-                  Thread<span>ly</span>
-                </span>
-              </Link>
+              <p className="sidebar-spaces-title">Spaces</p>
               <button
                 type="button"
                 className="sidebar-collapse-btn"
@@ -343,41 +297,6 @@ export function Sidebar() {
         </nav>
 
         <div className="sidebar-footer">
-          <button
-            type="button"
-            className="nav-link"
-            onClick={() => {
-              if (railCollapsed) {
-                expandSidebar();
-                return;
-              }
-              window.location.reload();
-            }}
-            title="Refresh"
-            aria-label="Refresh page"
-          >
-            <span className="nav-icon"><RefreshGlyph size={18} /></span>
-            <span className="nav-label">Refresh</span>
-          </button>
-          <button
-            type="button"
-            className="nav-link theme-nav-btn"
-            onClick={() => {
-              if (railCollapsed) {
-                expandSidebar();
-                return;
-              }
-              toggleTheme();
-            }}
-            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
-            aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-          >
-            <span className="nav-icon">
-              {theme === 'dark' ? <SunIcon size={18} /> : <MoonIcon size={18} />}
-            </span>
-            <span className="nav-label">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
-          </button>
-
           {loading && (
             <div className="user-card" style={{ padding: '0.35rem 0.5rem' }} aria-busy="true">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
@@ -465,26 +384,6 @@ export function Sidebar() {
   );
 }
 
-function RefreshGlyph({ size = 18 }: { size?: number }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-      <path d="M21 3v6h-6" />
-    </svg>
-  );
-}
-
 function FlameGlyph() {
   return (
     <svg
@@ -540,10 +439,37 @@ function InfraGlyph() {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <rect x="2" y="3" width="20" height="6" rx="1" />
-      <rect x="2" y="15" width="20" height="6" rx="1" />
-      <path d="M6 6h.01" />
-      <path d="M6 18h.01" />
+      <rect x="5" y="5" width="14" height="14" rx="2" />
+      <rect x="9" y="9" width="6" height="6" rx="1" />
+      <path d="M9 1v3" />
+      <path d="M15 1v3" />
+      <path d="M9 20v3" />
+      <path d="M15 20v3" />
+      <path d="M1 9h3" />
+      <path d="M1 15h3" />
+      <path d="M20 9h3" />
+      <path d="M20 15h3" />
+    </svg>
+  );
+}
+
+function PanelExpandIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
+      <path d="m14 10 3 2-3 2" />
     </svg>
   );
 }

@@ -81,6 +81,7 @@ export type CommentNode = {
   content: string;
   score: number;
   createdAt: string;
+  updatedAt?: string;
   replies: CommentNode[];
 };
 

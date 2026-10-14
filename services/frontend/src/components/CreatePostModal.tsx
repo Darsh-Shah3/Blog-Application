@@ -1,15 +1,17 @@
 ﻿'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { api, Community, friendlyError, Page, getApiUrl } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
+import { hasInlineLinks, renderLinkedText } from '@/lib/richText';
 import { SpinnerLabel } from '@/components/loaders';
-import { ClockIcon, LinkIcon, PaperclipIcon, PenIcon } from '@/components/icons';
+import { ClockIcon, LinkIcon, PaperclipIcon } from '@/components/icons';
 import { AuthorAvatar, VerifiedTick } from '@/components/AuthorIdentity';
 import { isSiteAdmin } from '@/lib/authorDirectory';
+import { SelectionLinkPanel } from '@/components/SelectionLinkPanel';
 
 type PostType = 'TEXT' | 'LINK' | 'IMAGE' | 'FILE';
 
@@ -41,13 +43,14 @@ export function CreatePostModal({
   const { token, user } = useAuth();
   const router = useRouter();
   const { success, error } = useToast();
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
   const [mounted, setMounted] = useState(false);
   const [communities, setCommunities] = useState<Community[]>([]);
   const [communityId, setCommunityId] = useState(defaultCommunityId || '');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [linkUrl, setLinkUrl] = useState('');
-  const [postType, setPostType] = useState<PostType>('TEXT');
+  const [linkToolsOpen, setLinkToolsOpen] = useState(false);
+  const [attachedUrl, setAttachedUrl] = useState('');
   const [mediaList, setMediaList] = useState<MediaMeta[]>([]);
   const [notificationSummary, setNotificationSummary] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -69,6 +72,10 @@ export function CreatePostModal({
     if (defaultCommunityId) setCommunityId(defaultCommunityId);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setLinkToolsOpen(true);
+      }
     };
     window.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
@@ -111,8 +118,6 @@ export function CreatePostModal({
       }
       const meta = (await res.json()) as MediaMeta;
       setMediaList((prev) => [...prev, meta]);
-      if (meta.kind === 'IMAGE') setPostType('IMAGE');
-      else if (postType === 'TEXT') setPostType('FILE');
       success('File attached.');
     } catch (e) {
       error(friendlyError(e, 'Upload failed. Check file type and size.'));
@@ -121,20 +126,25 @@ export function CreatePostModal({
     }
   };
 
+  const resolvePostType = (): PostType => {
+    if (mediaList.some((m) => (m.kind || '').toUpperCase() === 'IMAGE')) return 'IMAGE';
+    if (mediaList.length > 0) return 'FILE';
+    if (attachedUrl.trim() && !hasInlineLinks(content)) return 'LINK';
+    return 'TEXT';
+  };
+
   const canPublish = Boolean(
     communityId
     && title.trim()
     && !uploading
     && !publishing
-    && (postType !== 'LINK' || linkUrl.trim())
-    && (postType === 'TEXT' || postType === 'LINK' || mediaList.length > 0)
   );
 
   const reset = () => {
     setTitle('');
     setContent('');
-    setLinkUrl('');
-    setPostType('TEXT');
+    setLinkToolsOpen(false);
+    setAttachedUrl('');
     setMediaList([]);
     setNotificationSummary('');
     setScheduleOpen(false);
@@ -147,14 +157,16 @@ export function CreatePostModal({
       error('Please sign in to publish.');
       return;
     }
+    const postType = resolvePostType();
     if ((postType === 'IMAGE' || postType === 'FILE') && mediaList.length === 0) {
       error('Upload at least one file for IMAGE/FILE posts.');
       return;
     }
-    if (postType === 'LINK' && !linkUrl.trim()) {
-      error('Enter a link URL for LINK posts.');
-      return;
-    }
+    const links = attachedUrl
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
     let scheduledAt: string | null = null;
     if (scheduleOpen && scheduleLocal) {
       const at = new Date(scheduleLocal);
@@ -166,16 +178,13 @@ export function CreatePostModal({
     }
     setPublishing(true);
     try {
-      const links = postType === 'LINK'
-        ? linkUrl.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
-        : [];
       const post = await api<{ id: string; status?: string }>('/api/v1/posts', {
         method: 'POST',
         body: JSON.stringify({
           communityId,
           title,
           content: content || null,
-          postType: mediaList.length && postType === 'TEXT' ? 'FILE' : postType,
+          postType,
           linkUrls: links,
           media: mediaList.map((m) => ({
             id: m.id,
@@ -201,6 +210,15 @@ export function CreatePostModal({
     }
   };
 
+  const toggleSchedule = () => {
+    setScheduleOpen((openNow) => {
+      const next = !openNow;
+      if (next && !scheduleLocal) setScheduleLocal(minSchedule);
+      if (!next) setScheduleLocal('');
+      return next;
+    });
+  };
+
   const gate = (
     <div className="post-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
       <div className="post-modal-card panel" onClick={(e) => e.stopPropagation()}>
@@ -219,6 +237,7 @@ export function CreatePostModal({
   }
 
   const admin = isSiteAdmin(user.roles, user.username);
+  const showPreview = hasInlineLinks(content);
 
   const dialog = (
     <div
@@ -259,7 +278,6 @@ export function CreatePostModal({
             </div>
           </div>
           <div className="composer-header-aside">
-            <span className="muted composer-esc-hint">Esc to close</span>
             <button type="button" className="composer-close" aria-label="Close" onClick={onClose}>
               ×
             </button>
@@ -274,31 +292,51 @@ export function CreatePostModal({
               onChange={(e) => setTitle(e.target.value)}
               required
               maxLength={300}
-              placeholder="Add a title"
+              placeholder="Title"
               autoFocus
             />
             <textarea
+              ref={bodyRef}
               className="composer-text"
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="What do you want to talk about?"
+              placeholder="Write your post…"
               rows={6}
             />
-            {postType === 'LINK' && (
-              <input
-                className="composer-link"
-                value={linkUrl}
-                onChange={(e) => setLinkUrl(e.target.value)}
-                placeholder="https:// - paste link(s)"
-                required
-              />
+
+            {linkToolsOpen && (
+              <>
+                <SelectionLinkPanel
+                  open={linkToolsOpen}
+                  bodyRef={bodyRef}
+                  content={content}
+                  onChange={setContent}
+                  onApplied={(label) => success(`Linked “${label}”.`)}
+                  onError={error}
+                />
+                <div className="composer-links-panel">
+                  <input
+                    className="composer-link"
+                    value={attachedUrl}
+                    onChange={(e) => setAttachedUrl(e.target.value)}
+                    placeholder="Attached URL (optional)"
+                  />
+                </div>
+              </>
             )}
+
+            {showPreview && (
+              <div className="linked-text-preview">
+                <div className="linked-text-preview-body">{renderLinkedText(content)}</div>
+              </div>
+            )}
+
             <input
               className="composer-summary"
               value={notificationSummary}
               onChange={(e) => setNotificationSummary(e.target.value)}
               maxLength={500}
-              placeholder="Optional blurb for followers alerts"
+              placeholder="Notification blurb (optional)"
             />
             {mediaList.length > 0 && (
               <ul className="composer-media-list">
@@ -359,26 +397,22 @@ export function CreatePostModal({
               </label>
               <button
                 type="button"
-                className={`composer-tool ${postType === 'LINK' ? 'active' : ''}`}
-                title="Add link"
-                onClick={() => setPostType((t) => (t === 'LINK' ? 'TEXT' : 'LINK'))}
+                className={`composer-tool ${linkToolsOpen ? 'active' : ''}`}
+                title="Link selected text (toggle)"
+                aria-pressed={linkToolsOpen}
+                onClick={() => setLinkToolsOpen((v) => !v)}
               >
                 <LinkIcon size={20} />
               </button>
               <button
                 type="button"
                 className={`composer-tool ${scheduleOpen ? 'active' : ''}`}
-                title="Schedule"
-                onClick={() => {
-                  setScheduleOpen(true);
-                  if (!scheduleLocal) setScheduleLocal(minSchedule);
-                }}
+                title="Schedule (toggle)"
+                aria-pressed={scheduleOpen}
+                onClick={toggleSchedule}
               >
                 <ClockIcon size={20} />
               </button>
-              <span className="composer-tool muted" title="Text post">
-                <PenIcon size={20} />
-              </span>
             </div>
             <div className="composer-actions">
               <button type="button" className="btn ghost" onClick={onClose}>

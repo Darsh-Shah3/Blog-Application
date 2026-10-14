@@ -17,4 +17,6 @@ public class DmMessageResponse {
     Map<String, Object> author;
     String body;
     Instant createdAt;
+    Instant editedAt;
+    boolean deletedForEveryone;
 }

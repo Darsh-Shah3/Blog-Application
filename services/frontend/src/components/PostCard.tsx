@@ -11,6 +11,7 @@ import { DeleteIconBtn, ViewIconLink } from '@/components/ActionIcon';
 import { MessageCircleIcon } from '@/components/icons';
 import { AuthorAvatar, AuthorName } from '@/components/AuthorIdentity';
 import { usePrefetchAuthors } from '@/components/AuthorIdentity';
+import { renderLinkedText } from '@/lib/richText';
 
 export function PostCard({
   post,
@@ -114,12 +115,7 @@ export function PostCard({
         }
       }}
     >
-      <div className="vote-col" onClick={stop}>
-        <button className={`vote-btn up ${myVote === 1 ? 'active' : ''}`} onClick={() => vote(1)} type="button">▲</button>
-        <div className="score">{score}</div>
-        <button className={`vote-btn down ${myVote === -1 ? 'active' : ''}`} onClick={() => vote(-1)} type="button">▼</button>
-      </div>
-      <div style={{ minWidth: 0, flex: 1 }}>
+      <div className="post-row-body" style={{ minWidth: 0, flex: 1 }}>
         <div className="post-meta post-meta-with-avatar">
           <AuthorAvatar username={post.authorUsername} size={28} className="post-meta-avatar" />
           <span className="post-meta-text">
@@ -144,16 +140,19 @@ export function PostCard({
           </h2>
         )}
         {post.linkUrls && post.linkUrls.length > 0 && (
-          <p className="post-excerpt">
+          <div className="post-link-list" onClick={stop}>
             {post.linkUrls.slice(0, 2).map((u) => (
-              <a key={u} href={u} target="_blank" rel="noreferrer" style={{ display: 'block' }} onClick={stop}>{u}</a>
+              <a key={u} href={u} target="_blank" rel="noreferrer" className="post-link-chip" title={u}>
+                <span className="post-link-chip-label">{linkLabel(u)}</span>
+                <span className="post-link-chip-host muted">{linkHost(u)}</span>
+              </a>
             ))}
             {post.linkUrls.length > 2 && <span className="muted">+{post.linkUrls.length - 2} more</span>}
-          </p>
+          </div>
         )}
         {!expandedBody && post.content && (
           <p className="post-excerpt">
-            {post.content.slice(0, 220)}{post.content.length > 220 ? '…' : ''}
+            {renderLinkedText(excerptContent(post.content, 220))}
           </p>
         )}
         {imageSrc && (
@@ -175,6 +174,27 @@ export function PostCard({
           </p>
         )}
         <div className="post-meta post-actions" onClick={stop}>
+          <div className="vote-inline" aria-label="Vote">
+            <button
+              className={`vote-btn up ${myVote === 1 ? 'active' : ''}`}
+              onClick={() => vote(1)}
+              type="button"
+              aria-label="Upvote"
+              disabled={busy}
+            >
+              ▲
+            </button>
+            <span className={`score ${myVote !== 0 ? 'score-voted' : ''}`}>{score}</span>
+            <button
+              className={`vote-btn down ${myVote === -1 ? 'active' : ''}`}
+              onClick={() => vote(-1)}
+              type="button"
+              aria-label="Downvote"
+              disabled={busy}
+            >
+              ▼
+            </button>
+          </div>
           <Link href={`/post/${post.id}`} className="post-action-comments">
             <MessageCircleIcon size={15} />
             <span>{post.commentCount}</span>
@@ -191,4 +211,35 @@ export function PostCard({
 
 function nextValue(current: number, clicked: number) {
   return current === clicked ? 0 : clicked;
+}
+
+function excerptContent(text: string, max = 220) {
+  const t = text.replace(/\s+/g, ' ').trim();
+  if (t.length <= max) return t;
+  // Prefer cutting after a complete markdown link when possible
+  const slice = t.slice(0, max);
+  const open = slice.lastIndexOf('[');
+  const close = slice.lastIndexOf(')');
+  if (open > close && open > max - 40) {
+    return `${t.slice(0, open).trimEnd()}…`;
+  }
+  return `${slice.trimEnd()}…`;
+}
+
+function linkHost(url: string) {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+function linkLabel(url: string) {
+  try {
+    const u = new URL(url);
+    const path = u.pathname === '/' ? '' : u.pathname;
+    return path ? `${u.host}${path.length > 28 ? `${path.slice(0, 28)}…` : path}` : u.host;
+  } catch {
+    return url.length > 48 ? `${url.slice(0, 48)}…` : url;
+  }
 }

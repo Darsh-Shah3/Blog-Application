@@ -8,6 +8,8 @@ import { useAuth } from '@/lib/auth';
 import { useToast } from '@/lib/toast';
 import { SpinnerLabel } from '@/components/loaders';
 import { AuthorAvatar, AuthorName, usePrefetchAuthors } from '@/components/AuthorIdentity';
+import { ChatMessageActions } from '@/components/ChatMessageActions';
+import { canDeleteContent } from '@/lib/rbac';
 
 export type ChatMessage = {
   id: string;
@@ -16,6 +18,8 @@ export type ChatMessage = {
   authorUsername?: string;
   body: string;
   createdAt: string;
+  editedAt?: string | null;
+  deletedForEveryone?: boolean;
 };
 
 function relativeTime(iso: string) {
@@ -39,6 +43,12 @@ function normalizeMessage(raw: ChatMessage): ChatMessage {
     createdAt: typeof raw.createdAt === 'string'
       ? raw.createdAt
       : new Date(raw.createdAt as unknown as string).toISOString(),
+    editedAt: raw.editedAt
+      ? (typeof raw.editedAt === 'string'
+        ? raw.editedAt
+        : new Date(raw.editedAt as unknown as string).toISOString())
+      : null,
+    deletedForEveryone: Boolean(raw.deletedForEveryone),
   };
 }
 
@@ -62,11 +72,23 @@ export function CommunityChat({
   const clientRef = useRef<Client | null>(null);
   const seenIds = useRef<Set<string>>(new Set());
 
-  const upsert = (msg: ChatMessage) => {
+  const applyMessage = (msg: ChatMessage) => {
     const n = normalizeMessage(msg);
-    if (seenIds.current.has(n.id)) return;
-    seenIds.current.add(n.id);
-    setMessages((prev) => [...prev, n]);
+    setMessages((prev) => {
+      const idx = prev.findIndex((m) => m.id === n.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = n;
+        return next;
+      }
+      seenIds.current.add(n.id);
+      return [...prev, n];
+    });
+  };
+
+  const removeMessage = (id: string) => {
+    seenIds.current.delete(id);
+    setMessages((prev) => prev.filter((m) => m.id !== id));
   };
 
   const loadHistory = async () => {
@@ -111,7 +133,7 @@ export function CommunityChat({
         client.subscribe(`/topic/community.${communityId}`, (frame) => {
           try {
             const payload = JSON.parse(frame.body) as ChatMessage;
-            upsert(payload);
+            applyMessage(payload);
           } catch {
             // ignore bad frames
           }
@@ -135,7 +157,6 @@ export function CommunityChat({
       setLive('fallback');
     }
 
-    // REST poll only if WebSocket cannot stay live
     const poll = setInterval(() => {
       const mode = liveRef.current;
       if (mode === 'fallback' || mode === 'offline') {
@@ -174,19 +195,52 @@ export function CommunityChat({
         });
         setBody('');
       } else {
-        // Fallback REST (still broadcasts via server when WS peers are connected)
         const saved = await api<ChatMessage>(`/api/v1/communities/${communityId}/messages`, {
           method: 'POST',
           body: JSON.stringify({ body: text }),
         }, token);
         setBody('');
-        upsert(saved);
+        applyMessage(saved);
         setLive('fallback');
       }
     } catch (err) {
       error(friendlyError(err, 'Could not send message.'));
     } finally {
       setSending(false);
+    }
+  };
+
+  const editMessage = async (id: string, nextBody: string) => {
+    if (!token) return;
+    try {
+      const updated = await api<ChatMessage>(
+        `/api/v1/communities/${communityId}/messages/${id}`,
+        { method: 'PATCH', body: JSON.stringify({ body: nextBody }) },
+        token
+      );
+      applyMessage(updated);
+    } catch (e) {
+      error(friendlyError(e, 'Could not edit message.'));
+      throw e;
+    }
+  };
+
+  const deleteMessage = async (id: string, scope: 'ME' | 'EVERYONE') => {
+    if (!token) return;
+    try {
+      const updated = await api<ChatMessage | null>(
+        `/api/v1/communities/${communityId}/messages/${id}?scope=${scope}`,
+        { method: 'DELETE' },
+        token
+      );
+      if (scope === 'ME' || !updated) {
+        removeMessage(id);
+      } else {
+        applyMessage(updated);
+      }
+    } catch (e) {
+      error(friendlyError(e, 'Could not delete message.'));
+      throw e;
     }
   };
 
@@ -217,17 +271,33 @@ export function CommunityChat({
         )}
         {messages.map((m) => {
           const name = m.authorUsername || 'user';
-          const mine = user?.id === m.authorId;
+          const mine = user?.id === m.authorId || String(user?.id) === String(m.authorId);
+          const deleted = Boolean(m.deletedForEveryone);
+          const canModDelete = canDeleteContent(user, m.authorId);
           return (
-            <div key={m.id} className={`chat-bubble ${mine ? 'mine' : ''}`}>
+            <div key={m.id} className={`chat-bubble ${mine ? 'mine' : ''}${deleted ? ' deleted' : ''}`}>
               <div className="chat-bubble-row">
                 <AuthorAvatar username={name} size={32} className="chat-bubble-avatar" />
                 <div className="chat-bubble-content">
                   <div className="chat-bubble-meta">
                     <AuthorName username={name} />
                     <span className="muted">{relativeTime(m.createdAt)}</span>
+                    {m.editedAt && !deleted && <span className="muted chat-edited">edited</span>}
+                    {user && !deleted && (
+                      <ChatMessageActions
+                        canEdit={mine}
+                        canDeleteForMe
+                        canDeleteForEveryone={mine || canModDelete}
+                        initialBody={m.body}
+                        onEdit={(next) => editMessage(m.id, next)}
+                        onDeleteForMe={() => deleteMessage(m.id, 'ME')}
+                        onDeleteForEveryone={() => deleteMessage(m.id, 'EVERYONE')}
+                      />
+                    )}
                   </div>
-                  <p className="chat-bubble-body">{m.body}</p>
+                  <p className={`chat-bubble-body${deleted ? ' is-deleted' : ''}`}>
+                    {deleted ? 'This message was deleted' : m.body}
+                  </p>
                 </div>
               </div>
             </div>

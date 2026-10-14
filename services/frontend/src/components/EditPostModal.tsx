@@ -224,13 +224,9 @@ export function EditPostModal({
                 <span>{user?.displayName || user?.username || 'You'}</span>
                 {admin && <VerifiedTick size={14} />}
               </div>
-              <p className="muted" style={{ margin: '0.15rem 0 0', fontSize: '0.88rem' }}>
-                Edit your post · Link tool (Ctrl+K)
-              </p>
             </div>
           </div>
           <div className="composer-header-aside">
-            <span className="muted composer-esc-hint">Esc to close</span>
             <button type="button" className="composer-close" aria-label="Close" onClick={onClose}>
               ×
             </button>
@@ -239,9 +235,6 @@ export function EditPostModal({
 
         <form onSubmit={submit} className="composer-form" onKeyDown={stopKeys}>
           <div className="composer-body edit-post-body">
-            <label className="composer-field-label" htmlFor="edit-post-title">
-              Title
-            </label>
             <input
               id="edit-post-title"
               className="composer-title"
@@ -250,13 +243,10 @@ export function EditPostModal({
               onKeyDown={stopKeys}
               required
               maxLength={300}
-              placeholder="Add a title"
+              placeholder="Title"
               autoFocus
             />
 
-            <label className="composer-field-label" htmlFor="edit-post-body">
-              Body
-            </label>
             <textarea
               id="edit-post-body"
               ref={bodyRef}
@@ -264,7 +254,7 @@ export function EditPostModal({
               value={content}
               onChange={(e) => setContent(e.target.value)}
               onKeyDown={stopKeys}
-              placeholder="What do you want to talk about? Toggle Link, select text, apply URL, keep typing."
+              placeholder="Write your post…"
               rows={10}
             />
 
@@ -275,15 +265,13 @@ export function EditPostModal({
                   bodyRef={bodyRef}
                   content={content}
                   onChange={setContent}
-                  onApplied={(label) => success(`“${label}” linked — keep writing in the body.`)}
+                  onApplied={(label) => success(`Linked “${label}”.`)}
                   onError={error}
                 />
                 <div className="composer-links-panel">
-                  <label className="composer-field-label">Optional attached URLs</label>
                   <div className="composer-inline-link-row">
                     <input
                       className="composer-link"
-                      style={{ borderTop: 'none', paddingTop: 0 }}
                       value={linkDraft}
                       onChange={(e) => setLinkDraft(e.target.value)}
                       onKeyDown={(e) => {
@@ -293,7 +281,7 @@ export function EditPostModal({
                           addLink();
                         }
                       }}
-                      placeholder="https:// — paste a full URL to attach"
+                      placeholder="Attached URL (optional)"
                     />
                     <button type="button" className="btn secondary" onClick={addLink} disabled={!linkDraft.trim()}>
                       Add
@@ -317,7 +305,6 @@ export function EditPostModal({
 
             {showPreview && (
               <div className="linked-text-preview">
-                <span className="composer-field-label">How links look on the post</span>
                 <div className="linked-text-preview-body">{renderLinkedText(content)}</div>
               </div>
             )}

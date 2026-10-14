@@ -58,7 +58,7 @@ export function SelectionLinkPanel({
   const apply = () => {
     const href = normalizeHref(url);
     if (!href) {
-      onError?.('Paste the URL to open when someone clicks the selected text.');
+      onError?.('Enter a URL.');
       return;
     }
 
@@ -70,7 +70,7 @@ export function SelectionLinkPanel({
     const label = liveSelected || manualLabel.trim();
 
     if (!label) {
-      onError?.('Select text in the body first, or type the words to link.');
+      onError?.('Select or type text to link.');
       return;
     }
 
@@ -106,38 +106,21 @@ export function SelectionLinkPanel({
       onFocus={refreshSelection}
       onClick={refreshSelection}
     >
-      <div className="selection-link-panel-head">
-        <strong>Add link to selected text</strong>
-        <span className="muted">Select words in the body, paste a URL, Apply — then keep writing</span>
-      </div>
-
       {hasSelection ? (
         <p className="selection-link-selected">
-          Selected:{' '}
           <mark className="selection-link-mark">&ldquo;{selectedText}&rdquo;</mark>
-          <button type="button" className="btn ghost" style={{ marginLeft: '0.35rem' }} onClick={refreshSelection}>
-            Refresh
-          </button>
         </p>
       ) : (
-        <>
-          <p className="muted" style={{ margin: 0, fontSize: '0.88rem' }}>
-            Highlight text in the body above, or type the words here:
-          </p>
-          <input
-            className="input"
-            value={manualLabel}
-            onChange={(e) => setManualLabel(e.target.value)}
-            onKeyDown={onKey}
-            placeholder="Words to link (e.g. github)"
-            maxLength={120}
-          />
-        </>
+        <input
+          className="input"
+          value={manualLabel}
+          onChange={(e) => setManualLabel(e.target.value)}
+          onKeyDown={onKey}
+          placeholder="Text to link"
+          maxLength={120}
+        />
       )}
 
-      <label className="composer-field-label" htmlFor="selection-link-url">
-        Link URL
-      </label>
       <div className="composer-inline-link-row">
         <input
           id="selection-link-url"
@@ -146,10 +129,10 @@ export function SelectionLinkPanel({
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={onKey}
           onFocus={refreshSelection}
-          placeholder="https://github.com/your-profile"
+          placeholder="https://"
         />
         <button type="button" className="btn" disabled={!url.trim()} onClick={() => apply()}>
-          Apply link
+          Apply
         </button>
       </div>
     </div>

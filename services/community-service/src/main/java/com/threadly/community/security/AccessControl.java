@@ -24,6 +24,13 @@ public final class AccessControl {
         return hasAuthority("COMMUNITY_DELETE") || isAdmin();
     }
 
+    /** Admins/moderators may remove community chat messages for everyone (not private DMs). */
+    public static boolean canModerateCommunityChat() {
+        return hasAuthority("CONTENT_DELETE_ANY")
+                || authorities().contains("ROLE_MODERATOR")
+                || isAdmin();
+    }
+
     private static Set<String> authorities() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || auth.getAuthorities() == null) {

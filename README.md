@@ -71,7 +71,8 @@ See [docs/security.md](docs/security.md) and [docs/deploy.md](docs/deploy.md) fo
 |---|---|
 | Frontend | http://localhost:3000 |
 | API gateway | http://localhost:8080 |
-| Auth Swagger | http://localhost:8081/swagger-ui.html (local debug only; disabled under `prod`) |
+| Auth Swagger | http://localhost:8081/swagger-ui/index.html (local debug only; disabled under `prod`) |
+| API docs index | http://localhost:8080/ (lists all service Swagger links; use hyphen `swagger-ui`, not `swagger_ui`) |
 | pgAdmin | http://localhost:5050 |
 | Prometheus | http://localhost:9090 |
 | Grafana | http://localhost:3001 (`admin` / `admin` by default) |

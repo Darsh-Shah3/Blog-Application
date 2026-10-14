@@ -2,6 +2,7 @@ package com.threadly.comment.service;
 
 import com.threadly.comment.dto.CommentResponse;
 import com.threadly.comment.dto.CreateCommentRequest;
+import com.threadly.comment.dto.UpdateCommentRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -17,6 +18,8 @@ public interface CommentService {
     Page<CommentResponse> pageRoots(UUID postId, Pageable pageable);
 
     void delete(UUID id, UUID userId);
+
+    CommentResponse update(UUID id, UUID userId, String actorUsername, UpdateCommentRequest request);
 
     CommentResponse adjustScore(UUID id, long delta);
 

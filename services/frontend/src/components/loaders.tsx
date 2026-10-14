@@ -106,15 +106,10 @@ export function ContentPlaceholder({
   );
 }
 
-/** YouTube-ish post row skeleton. */
+/** Softened post row skeleton (matches inline vote actions). */
 export function PostSkeleton() {
   return (
     <article className="post-row post-skeleton" aria-hidden="true">
-      <div className="vote-col">
-        <Skeleton width={28} height={28} radius={8} />
-        <Skeleton width={22} height={14} radius={4} style={{ margin: '0.25rem 0' }} />
-        <Skeleton width={28} height={28} radius={8} />
-      </div>
       <div className="stack" style={{ gap: '0.55rem', flex: 1 }}>
         <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
           <Skeleton width="5rem" height={12} />
@@ -125,9 +120,9 @@ export function PostSkeleton() {
         <Skeleton width="100%" height={12} />
         <Skeleton width="92%" height={12} />
         <Skeleton width="55%" height={12} />
-        <div style={{ display: 'flex', gap: '0.65rem', marginTop: '0.25rem' }}>
-          <Skeleton width="6rem" height={14} radius={999} />
-          <Skeleton width="4rem" height={14} radius={999} />
+        <div style={{ display: 'flex', gap: '0.65rem', marginTop: '0.25rem', alignItems: 'center' }}>
+          <Skeleton width="4.5rem" height={18} radius={6} />
+          <Skeleton width="3.5rem" height={14} radius={6} />
         </div>
       </div>
     </article>

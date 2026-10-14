@@ -3,6 +3,8 @@ package com.threadly.community.service.impl;
 import com.threadly.community.client.NotificationClient;
 import com.threadly.community.dto.CommunityMessageResponse;
 import com.threadly.community.dto.CreateChatMessageRequest;
+import com.threadly.community.dto.DeleteMessageRequest;
+import com.threadly.community.dto.UpdateChatMessageRequest;
 import com.threadly.community.entity.Community;
 import com.threadly.community.entity.CommunityMessage;
 import com.threadly.community.entity.Membership;
@@ -10,16 +12,19 @@ import com.threadly.community.exception.ApiException;
 import com.threadly.community.repository.CommunityMessageRepository;
 import com.threadly.community.repository.CommunityRepository;
 import com.threadly.community.repository.MembershipRepository;
+import com.threadly.community.security.AccessControl;
 import com.threadly.community.service.CommunityChatService;
 import com.threadly.community.util.AuditActors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,13 +48,15 @@ public class CommunityChatServiceImpl implements CommunityChatService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<CommunityMessageResponse> list(UUID communityId, Pageable pageable) {
+    public Page<CommunityMessageResponse> list(UUID communityId, UUID viewerId, Pageable pageable) {
         if (!communityRepository.existsById(communityId)) {
             throw new ApiException("Community not found", HttpStatus.NOT_FOUND.value());
         }
-        Pageable capped = pageable.getPageSize() > 100
-                ? org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(), 100, pageable.getSort())
-                : pageable;
+        int size = Math.min(Math.max(pageable.getPageSize(), 1), 100);
+        Pageable capped = PageRequest.of(pageable.getPageNumber(), size);
+        if (viewerId != null) {
+            return messageRepository.findVisibleForUser(communityId, viewerId, capped).map(this::toResponse);
+        }
         return messageRepository.findByCommunityIdOrderByCreatedAtDesc(communityId, capped).map(this::toResponse);
     }
 
@@ -67,6 +74,56 @@ public class CommunityChatServiceImpl implements CommunityChatService {
         messagingTemplate.convertAndSend(topic(communityId), result.response());
         notifyMembers(result);
         return result.response();
+    }
+
+    @Override
+    @Transactional
+    public CommunityMessageResponse edit(
+            UUID communityId, UUID userId, UUID messageId, UpdateChatMessageRequest request) {
+        CommunityMessage msg = requireMessage(communityId, messageId);
+        if (!msg.getAuthorId().equals(userId)) {
+            throw new ApiException("Only the author can edit this message", HttpStatus.FORBIDDEN.value());
+        }
+        if (msg.isDeletedForEveryone()) {
+            throw new ApiException("Cannot edit a deleted message", HttpStatus.BAD_REQUEST.value());
+        }
+        String body = request.getBody() == null ? "" : request.getBody().trim();
+        if (body.isEmpty()) {
+            throw new ApiException("Message cannot be empty", HttpStatus.BAD_REQUEST.value());
+        }
+        msg.setBody(body);
+        msg.setEditedAt(Instant.now());
+        CommunityMessageResponse response = toResponse(messageRepository.save(msg));
+        messagingTemplate.convertAndSend(topic(communityId), response);
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public CommunityMessageResponse delete(
+            UUID communityId, UUID userId, UUID messageId, DeleteMessageRequest request) {
+        CommunityMessage msg = requireMessage(communityId, messageId);
+        DeleteMessageRequest.Scope scope = request.getScope() == null
+                ? DeleteMessageRequest.Scope.ME
+                : request.getScope();
+
+        if (scope == DeleteMessageRequest.Scope.ME) {
+            msg.hideFor(userId);
+            messageRepository.save(msg);
+            return null;
+        }
+
+        boolean author = msg.getAuthorId().equals(userId);
+        // Admins may delete community chat for everyone; private DMs are handled elsewhere.
+        if (!author && !AccessControl.canModerateCommunityChat()) {
+            throw new ApiException("Not allowed to delete this message for everyone", HttpStatus.FORBIDDEN.value());
+        }
+        msg.setDeletedForEveryone(true);
+        msg.setBody("");
+        msg.setEditedAt(Instant.now());
+        CommunityMessageResponse response = toResponse(messageRepository.save(msg));
+        messagingTemplate.convertAndSend(topic(communityId), response);
+        return response;
     }
 
     private void notifyMembers(ChatWriteResult result) {
@@ -128,6 +185,15 @@ public class CommunityChatServiceImpl implements CommunityChatService {
                 response);
     }
 
+    private CommunityMessage requireMessage(UUID communityId, UUID messageId) {
+        CommunityMessage msg = messageRepository.findById(messageId)
+                .orElseThrow(() -> new ApiException("Message not found", HttpStatus.NOT_FOUND.value()));
+        if (!msg.getCommunityId().equals(communityId)) {
+            throw new ApiException("Message not found", HttpStatus.NOT_FOUND.value());
+        }
+        return msg;
+    }
+
     private record ChatWriteResult(
             UUID communityId,
             String communityName,
@@ -141,14 +207,17 @@ public class CommunityChatServiceImpl implements CommunityChatService {
         String username = m.getAuthor() != null && m.getAuthor().get("username") != null
                 ? String.valueOf(m.getAuthor().get("username"))
                 : "user";
+        boolean deleted = m.isDeletedForEveryone();
         return CommunityMessageResponse.builder()
                 .id(m.getId())
                 .communityId(m.getCommunityId())
                 .authorId(m.getAuthorId())
                 .authorUsername(username)
                 .author(m.getAuthor())
-                .body(m.getBody())
+                .body(deleted ? "" : m.getBody())
                 .createdAt(m.getCreatedAt())
+                .editedAt(m.getEditedAt())
+                .deletedForEveryone(deleted)
                 .build();
     }
 }

@@ -45,22 +45,15 @@ export default function LandingPage() {
     };
   }, [token]);
 
-  const featuredHot = hotPosts[0];
   const talkingNow = hotPosts.slice(0, 6);
   const feedMain = hotPosts.slice(0, 5);
-  const totalMembers = communities.reduce((n, c) => n + (c.memberCount || 0), 0);
 
   return (
     <div className="home">
       <section className="home-hero" aria-labelledby="home-brand">
-        <div className="home-hero-plane" aria-hidden="true">
-          <div className="home-hero-mesh" />
-          <span className="home-orb home-orb-a" />
-          <span className="home-orb home-orb-b" />
-          <span className="home-orb home-orb-c" />
-        </div>
+        <div className="home-hero-plane" aria-hidden="true" />
 
-        <div className="home-hero-layout">
+        <div className="home-hero-layout home-hero-layout-solo">
           <div className="home-hero-copy">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -104,45 +97,6 @@ export default function LandingPage() {
                   </Link>
                 </>
               )}
-            </div>
-            {ready && (
-              <p className="home-hero-pulse muted">
-                <strong>{communities.length || '—'}</strong> spaces
-                <span aria-hidden="true"> · </span>
-                <strong>{totalMembers || '—'}</strong> members
-                <span aria-hidden="true"> · </span>
-                <strong>{hotPosts.length || '—'}</strong> hot threads
-              </p>
-            )}
-          </div>
-
-          <div className="home-stage" aria-hidden="true">
-            <div className="home-stage-card home-stage-card-a">
-              <span className="home-stage-kicker">Live chat</span>
-              <span className="home-stage-title">Community rooms, real-time</span>
-              <span className="home-stage-meta">WebSocket threads · members only</span>
-            </div>
-            <div className="home-stage-card home-stage-card-b">
-              <span className="home-stage-kicker">Hot posts</span>
-              <span className="home-stage-title">
-                {featuredHot?.title || 'Stories rising across spaces'}
-              </span>
-              <span className="home-stage-meta">
-                {featuredHot
-                  ? `${featuredHot.communityName || 'Community'}${featuredHot.authorUsername ? ` · ${featuredHot.authorUsername}` : ''}`
-                  : 'Votes, replies, and follows'}
-              </span>
-            </div>
-            <div className="home-stage-card home-stage-card-c">
-              <span className="home-stage-kicker">Spaces</span>
-              <span className="home-stage-title">
-                {communities[0]?.name || 'Join circles that match you'}
-              </span>
-              <span className="home-stage-meta">
-                {communities[0]
-                  ? `${communities[0].memberCount} members · growing`
-                  : 'Discover · join · post'}
-              </span>
             </div>
           </div>
         </div>

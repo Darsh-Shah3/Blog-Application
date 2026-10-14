@@ -11,6 +11,7 @@ import {
   NotificationSkeletonList,
   PageSpinner,
 } from '@/components/loaders';
+import { TopBar } from '@/components/TopBar';
 
 type Filter = 'all' | 'DIRECT_MESSAGE' | 'FOLLOW_NEW_POST' | 'COMMUNITY_CHAT';
 
@@ -40,7 +41,7 @@ export default function NotificationsPage() {
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const load = async (search = q) => {
     if (!token) return;
     setLoading(true);
     try {
@@ -49,7 +50,7 @@ export default function NotificationsPage() {
         unreadOnly: String(unreadOnly),
         sort: 'createdAt,desc',
       });
-      if (q.trim()) params.set('q', q.trim());
+      if (search.trim()) params.set('q', search.trim());
       if (filter !== 'all') params.set('type', filter);
       const page = await api<Page<NotificationItem>>(`/api/v1/notifications?${params}`, {}, token);
       setItems(page.content || []);
@@ -115,49 +116,42 @@ export default function NotificationsPage() {
   ];
 
   return (
-    <div style={{ marginTop: '1.25rem' }} className="stack">
-      <section className="hero" style={{ paddingTop: '1rem' }}>
-        <h1>Notifications</h1>
-        <p>Posts, community chat, and private messages — open one to jump straight there.</p>
-      </section>
-
-      <form
-        className="toolbar"
-        onSubmit={(e) => {
-          e.preventDefault();
-          load();
+    <div className="page-shell page-shell-wide stack">
+      <TopBar
+        crumb="Alerts"
+        searchPlaceholder="Search notifications…"
+        defaultSearch={q}
+        onSearch={(value) => {
+          setQ(value);
+          load(value);
         }}
-      >
-        <input
-          className="input"
-          placeholder="Search notifications…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          style={{ flex: 1, minWidth: '10rem' }}
-        />
-        <button type="submit" className="btn secondary">Search</button>
-        <button
-          type="button"
-          className={`chip ${unreadOnly ? 'active' : ''}`}
-          onClick={() => setUnreadOnly((v) => !v)}
-        >
-          unread only
-        </button>
-        <button type="button" className="btn ghost" onClick={markAll}>Mark all read</button>
-      </form>
-
-      <div className="toolbar" style={{ marginTop: 0 }}>
-        {filters.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            className={`chip ${filter === f.id ? 'active' : ''}`}
-            onClick={() => setFilter(f.id)}
-          >
-            {f.label}
+        filters={(
+          <>
+            {filters.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                className={`chip ${filter === f.id ? 'active' : ''}`}
+                onClick={() => setFilter(f.id)}
+              >
+                {f.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              className={`chip ${unreadOnly ? 'active' : ''}`}
+              onClick={() => setUnreadOnly((v) => !v)}
+            >
+              Unread
+            </button>
+          </>
+        )}
+        actions={(
+          <button type="button" className="btn ghost" onClick={markAll}>
+            Mark all read
           </button>
-        ))}
-      </div>
+        )}
+      />
 
       {loading && <NotificationSkeletonList count={6} />}
       {!loading && items.length === 0 && (
@@ -205,9 +199,9 @@ export default function NotificationsPage() {
                 {(n.summary || n.body) && (
                   <p className="notif-summary">{n.summary || n.body}</p>
                 )}
-                <div className="toolbar" onClick={(e) => e.stopPropagation()}>
+                <div className="notif-actions" onClick={(e) => e.stopPropagation()}>
                   {n.linkUrl && (
-                    <button type="button" className="btn secondary" onClick={() => openNotification(n)}>
+                    <button type="button" className="btn ghost" onClick={() => openNotification(n)}>
                       {openHint(n)}
                     </button>
                   )}

@@ -14,7 +14,7 @@ import {
   SpinnerLabel,
 } from '@/components/loaders';
 import { TopBar } from '@/components/TopBar';
-import { CreateIconBtn } from '@/components/ActionIcon';
+import { PenIcon } from '@/components/icons';
 
 const SORTS_AUTH = [
   { id: 'for_you', label: 'For you' },
@@ -113,33 +113,18 @@ export default function FeedPage() {
             )}
             actions={
               user ? (
-                <CreateIconBtn label="New post" onClick={() => setComposeOpen(true)} />
+                <button type="button" className="btn feed-compose-btn" onClick={() => setComposeOpen(true)}>
+                  <PenIcon size={15} />
+                  <span>New post</span>
+                </button>
               ) : (
                 <Link className="btn secondary" href="/login">Log in</Link>
               )
             }
           />
 
-          <header className="page-header page-header-compact">
-            <div className="page-header-row">
-              <div>
-                <p className="page-kicker">Feed</p>
-                <h1>Posts</h1>
-                <p>
-                  Hot and rising stories across every space. Use the header to search and sort —
-                  open the + control to publish.
-                </p>
-              </div>
-              {user && (
-                <button type="button" className="btn" onClick={() => setComposeOpen(true)}>
-                  New post
-                </button>
-              )}
-            </div>
-          </header>
-
           {!authLoading && !token && (
-            <div className="panel feed-guest-banner">
+            <div className="feed-guest-banner soft-banner">
               <div>
                 <strong>Browsing as a guest</strong>
                 <p className="muted" style={{ margin: '0.25rem 0 0' }}>

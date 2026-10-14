@@ -30,25 +30,23 @@ export const metadata: Metadata = {
   },
 };
 
-/** Runs before paint so the saved theme applies without a flash. */
+/** Runs before paint so the saved theme applies without a flash. Dark by default. */
 const themeInitScript = `
 (function(){
   try {
     var k = 'threadly-theme';
     var t = localStorage.getItem(k);
-    if (t !== 'light' && t !== 'dark') {
-      t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }
+    if (t !== 'light' && t !== 'dark') t = 'dark';
     document.documentElement.setAttribute('data-theme', t);
   } catch (e) {
-    document.documentElement.setAttribute('data-theme', 'light');
+    document.documentElement.setAttribute('data-theme', 'dark');
   }
 })();
 `;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${dmSans.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${fraunces.variable} ${dmSans.variable}`} data-theme="dark" suppressHydrationWarning>
       <body>
         <Script id="threadly-theme-init" strategy="beforeInteractive">
           {themeInitScript}

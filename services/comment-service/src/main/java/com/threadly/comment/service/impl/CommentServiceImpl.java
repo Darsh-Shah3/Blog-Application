@@ -2,6 +2,7 @@ package com.threadly.comment.service.impl;
 
 import com.threadly.comment.dto.CommentResponse;
 import com.threadly.comment.dto.CreateCommentRequest;
+import com.threadly.comment.dto.UpdateCommentRequest;
 import com.threadly.comment.entity.Comment;
 import com.threadly.comment.exception.ApiException;
 import com.threadly.comment.port.PostPort;
@@ -136,6 +137,26 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     @Transactional
+    public CommentResponse update(UUID id, UUID userId, String actorUsername, UpdateCommentRequest request) {
+        Comment comment = commentRepository.findById(id)
+                .orElseThrow(() -> new ApiException("Comment not found", HttpStatus.NOT_FOUND.value()));
+        if (!comment.getAuthorId().equals(userId)) {
+            throw new ApiException("Only the author can edit this comment", HttpStatus.FORBIDDEN.value());
+        }
+        String content = request.getContent() == null ? "" : request.getContent().trim();
+        if (content.isEmpty()) {
+            throw new ApiException("Comment cannot be empty", HttpStatus.BAD_REQUEST.value());
+        }
+        String by = AuditActors.resolve(actorUsername, userId);
+        comment.setContent(content);
+        comment.setUpdatedBy(by);
+        Comment saved = commentRepository.save(comment);
+        log.info("Comment updated id={} by userId={}", id, userId);
+        return toResponse(saved, new ArrayList<>());
+    }
+
+    @Override
+    @Transactional
     public void delete(UUID id, UUID userId) {
         Comment comment = commentRepository.findById(id)
                 .orElseThrow(() -> new ApiException("Comment not found", HttpStatus.NOT_FOUND.value()));
@@ -183,6 +204,7 @@ public class CommentServiceImpl implements CommentService {
                 .content(c.getContent())
                 .score(c.getScore())
                 .createdAt(c.getCreatedAt())
+                .updatedAt(c.getUpdatedAt())
                 .createdBy(c.getCreatedBy())
                 .updatedBy(c.getUpdatedBy())
                 .replies(replies)
