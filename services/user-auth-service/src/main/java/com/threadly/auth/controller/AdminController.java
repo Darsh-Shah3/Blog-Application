@@ -1,5 +1,6 @@
 package com.threadly.auth.controller;
 
+import com.threadly.auth.dto.AdminCreateUserRequest;
 import com.threadly.auth.dto.AssignRolesRequest;
 import com.threadly.auth.dto.RoleResponse;
 import com.threadly.auth.dto.UserResponse;
@@ -9,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -30,6 +32,16 @@ public class AdminController {
             @RequestParam(required = false) String q,
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(adminService.listUsers(q, pageable));
+    }
+
+    @PostMapping("/users")
+    public ResponseEntity<UserResponse> createUser(
+            Authentication authentication,
+            @RequestHeader(value = "X-Username", required = false) String username,
+            @Valid @RequestBody AdminCreateUserRequest request) {
+        UUID actorId = UUID.fromString(authentication.getName());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(adminService.createUser(request, actorId, username));
     }
 
     @PutMapping("/users/{id}/roles")

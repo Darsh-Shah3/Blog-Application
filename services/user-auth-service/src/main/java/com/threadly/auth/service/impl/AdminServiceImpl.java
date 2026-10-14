@@ -1,15 +1,18 @@
 package com.threadly.auth.service.impl;
 
+import com.threadly.auth.dto.AdminCreateUserRequest;
 import com.threadly.auth.dto.AssignRolesRequest;
 import com.threadly.auth.dto.RoleResponse;
 import com.threadly.auth.dto.UserResponse;
 import com.threadly.auth.entity.Role;
 import com.threadly.auth.entity.User;
+import com.threadly.auth.entity.UserFollow;
 import com.threadly.auth.exception.ApiException;
 import com.threadly.auth.mapper.UserMapper;
 import com.threadly.auth.rbac.AppRole;
 import com.threadly.auth.rbac.RbacCatalog;
 import com.threadly.auth.repository.RoleRepository;
+import com.threadly.auth.repository.UserFollowRepository;
 import com.threadly.auth.repository.UserRepository;
 import com.threadly.auth.cache.RedisJsonCache;
 import com.threadly.auth.service.AdminService;
@@ -24,6 +27,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,7 +47,9 @@ public class AdminServiceImpl implements AdminService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final UserFollowRepository followRepository;
     private final UserMapper userMapper;
+    private final PasswordEncoder passwordEncoder;
     private final MailService mailService;
     private final TokenBlacklistService tokenBlacklistService;
     private final ObjectProvider<RedisJsonCache> cacheProvider;
@@ -59,6 +65,71 @@ public class AdminServiceImpl implements AdminService {
         }
         String term = q.trim().toLowerCase(Locale.ROOT);
         return userRepository.searchActive(term, pageable).map(userMapper::toResponse);
+    }
+
+    @Override
+    @Transactional
+    public UserResponse createUser(AdminCreateUserRequest request, UUID actorId, String actorUsername) {
+        String username = request.getUsername().trim().toLowerCase(Locale.ROOT);
+        String email = request.getEmail().trim().toLowerCase(Locale.ROOT);
+        if (userRepository.existsActiveByEmail(email)) {
+            throw new ApiException("Email already registered", HttpStatus.CONFLICT.value());
+        }
+        if (userRepository.existsActiveByUsername(username)) {
+            throw new ApiException("Username already taken", HttpStatus.CONFLICT.value());
+        }
+
+        Set<String> wanted = new HashSet<>();
+        if (request.getRoles() != null) {
+            for (String r : request.getRoles()) {
+                if (r != null && !r.isBlank()) {
+                    wanted.add(r.trim().toUpperCase(Locale.ROOT));
+                }
+            }
+        }
+        wanted.add(AppRole.ROLE_USER.name());
+        for (String name : wanted) {
+            if (AppRole.fromName(name).isEmpty()) {
+                throw new ApiException("Unknown role: " + name, HttpStatus.BAD_REQUEST.value());
+            }
+        }
+        if (wanted.contains(AppRole.ROLE_ADMIN.name()) || wanted.contains(AppRole.ROLE_MODERATOR.name())) {
+            wanted.add(AppRole.ROLE_USER.name());
+        }
+
+        String actor = AuditActors.resolve(actorUsername, actorId);
+        String display = request.getDisplayName() == null || request.getDisplayName().isBlank()
+                ? request.getUsername().trim()
+                : request.getDisplayName().trim();
+
+        User user = User.builder()
+                .username(username)
+                .email(email)
+                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .displayName(display)
+                .bio(null)
+                .karma(0L)
+                .createdBy(actor)
+                .updatedBy(actor)
+                .build();
+
+        Set<Role> roles = new HashSet<>();
+        for (String name : wanted) {
+            Role role = roleRepository.findByName(name)
+                    .orElseThrow(() -> new ApiException("Role missing in database: " + name, 500));
+            roles.add(role);
+        }
+        user.replaceRoles(roles);
+        user = userRepository.save(user);
+        if (followRepository.findByUserId(user.getId()).isEmpty()) {
+            followRepository.save(UserFollow.builder()
+                    .userId(user.getId())
+                    .username(user.getUsername())
+                    .build());
+        }
+        log.info("Admin created user id={} username={} actor={} roles={}",
+                user.getId(), user.getUsername(), actor, wanted);
+        return userMapper.toResponse(user);
     }
 
     @Override

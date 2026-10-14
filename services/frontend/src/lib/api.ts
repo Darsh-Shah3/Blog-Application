@@ -275,6 +275,48 @@ function isPublicApiPath(path: string, method = 'GET'): boolean {
   return false;
 }
 
+export async function listAdminUsers(token: string, q = '', size = 50): Promise<Page<User>> {
+  const qs = q.trim() ? `&q=${encodeURIComponent(q.trim())}` : '';
+  return api<Page<User>>(`/api/v1/admin/users?size=${size}${qs}`, {}, token);
+}
+
+export async function listAdminRoles(token: string): Promise<RoleInfo[]> {
+  return api<RoleInfo[]>('/api/v1/admin/roles', {}, token);
+}
+
+export async function assignAdminRoles(
+  token: string,
+  userId: string,
+  roles: string[]
+): Promise<User> {
+  return api<User>(
+    `/api/v1/admin/users/${userId}/roles`,
+    { method: 'PUT', body: JSON.stringify({ roles }) },
+    token
+  );
+}
+
+export async function deleteAdminUser(token: string, userId: string): Promise<void> {
+  await api(`/api/v1/admin/users/${userId}`, { method: 'DELETE' }, token);
+}
+
+export async function createAdminUser(
+  token: string,
+  body: {
+    username: string;
+    email: string;
+    password: string;
+    displayName?: string;
+    roles?: string[];
+  }
+): Promise<User> {
+  return api<User>(
+    '/api/v1/admin/users',
+    { method: 'POST', body: JSON.stringify(body) },
+    token
+  );
+}
+
 export async function api<T>(
   path: string,
   options: RequestInit = {},

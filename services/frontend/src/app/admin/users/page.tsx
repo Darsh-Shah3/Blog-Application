@@ -90,7 +90,7 @@ export default function AdminUsersPage() {
   }, [token, user?.id]);
 
   const sortedCatalog = useMemo(() => {
-    const order = [ROLES.USER, ROLES.MODERATOR, ROLES.ADMIN];
+    const order: string[] = [ROLES.USER, ROLES.MODERATOR, ROLES.ADMIN];
     return [...rolesCatalog].sort(
       (a, b) => order.indexOf(a.name) - order.indexOf(b.name)
     );
